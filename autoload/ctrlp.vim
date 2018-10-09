@@ -458,7 +458,7 @@ fu! s:UserCmd(lscmd)
 	if (has('win32') || has('win64')) && match(&shellcmdflag, "/") != -1
 		let lscmd = substitute(lscmd, '\v(^|\&\&\s*)\zscd (/d)@!', 'cd /d ', '')
 	en
-	let path = exists('*shellescape') ? shellescape(path) : path
+	let path = ctrlp#utils#shellescape(path)
 	if (has('win32') || has('win64')) && match(&shell, 'sh') != -1
 		let path = tr(path, '\', '/')
 	en

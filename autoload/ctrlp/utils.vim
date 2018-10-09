@@ -105,6 +105,33 @@ fu! ctrlp#utils#fnesc(path, type, ...)
 	en
 	retu a:0 ? escape(path, a:1) : path
 endf
+
+fu! ctrlp#utils#shellescape(p)
+	" prev: if exists('s:shellescape')
+	" prev: 	"? return call(s:shellescape, [a:p])
+	" prev: 	return s:shellescape(a:p)
+	" prev: endif
+	" prev: if exists('*shellescape')
+	" prev: 	let s:shellescape = function('shellescape')
+	" prev: el
+	" prev: 	function! s:shellescape(p)
+	" prev: 		return escape(a:p, '\\/ "' . "'")
+	" prev: 	endfunction
+	" prev: en
+	" prev: "? " delegate to the code at the beginning to perform the right call
+	" prev: "? return ctrlp#utils#shellescape(a:p)
+	" prev: return s:shellescape(a:p)
+	if !exists('s:shellescape')
+		if exists('*shellescape')
+			let s:shellescape = function('shellescape')
+		el
+			function! s:shellescape(p)
+				return escape(a:p, '\\/ "' . "'")
+			endfunction
+		en
+	en
+	return s:shellescape(a:p)
+endf
 "}}}
 
 " vim:fen:fdm=marker:fmr={{{,}}}:fdl=0:fdc=1:ts=2:sw=2:sts=2

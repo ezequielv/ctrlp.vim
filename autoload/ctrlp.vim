@@ -1212,8 +1212,26 @@ fu! s:AcceptSelection(action)
 			let type = exttype == 'dict' ? exttype : 'list'
 		en
 	en
-	let actargs = type == 'dict' ? [{ 'action': md, 'line': line, 'icr': icr, 'input': str}]
-		\ : [md, line]
+	" TODO: remove: echomsg 'DEBUG: s:AcceptSelection(): ' . string({ 'type': type, 'md': md, 'line': line, 'icr': icr, 'str': str })
+	" orig: let actargs = (type == 'dict' ? [{ 'action': md, 'line': line, 'icr': icr, 'input': str}]
+	" orig: 	\ : [md, line])
+	"+ if type == 'dict'
+	"+ 	let actargs = [{ 'action': md, 'line': line, 'icr': icr, 'input': str}]
+	"+ else
+	"+ 	let actargs = [md, line]
+	"+ endif
+	"- note: still get_tv_string_buf() on vim-7.0 and vim-7.1:
+	"-  let actargs = ( (type == 'dict') ? ( [{ 'action': md, 'line': line, 'icr': icr, 'input': str}] ) : ( [md, line] ) )
+	"
+	" NOTE: this fixes vim-7.0 and vim-7.1, which choked on this
+	" command/sentence:
+	"		let actargs = type == 'dict' ? [{ 'action': md, 'line': line, 'icr': icr, 'input': str}]
+	"		 \ : [md, line]
+	if type == 'dict'
+		let actargs = [{ 'action': md, 'line': line, 'icr': icr, 'input': str}]
+	el
+		let actargs = [md, line]
+	en
 	cal call(actfunc, actargs)
 endf
 " - CreateNewFile() {{{1

@@ -2659,6 +2659,11 @@ fu! ctrlp#init(type, ...)
 			retu
 		en
 	en
+	" prev: cal ctrlp#setlines(s:settype(type))
+	" prev: "+ " code taken from 'ctrlp#setlines()' {{{
+	" prev: "+ let s:itemtype = s:settype(type)
+	" prev: "+ cal s:modevar()
+	" prev: "+ " }}}
 	" Fixed issue ctrlpvim/ctrlp.vim#463 : Opening 'ctrlp' in certain modes
 	" (':CtrlPBufTag', ':CtrlPLine') seems to trigger a partially deffective
 	" intialisation (for example, syntax highlighting not working as expected).
@@ -2676,7 +2681,29 @@ fu! ctrlp#init(type, ...)
 	if shouldExitSingle && s:ExitIfSingleCandidate()
 		return 0
 	en
+
+	" TODO: remove: [ezequielv] trying to fix the initial syntax highlighting being disabled {{{
+	if 0 " master switch for all these hacks
+		if !0
+			"cal ctrlp#setlines()
+			"cal ctrlp#syntax()
+			cal s:PrtSwitcher()
+		elseif !0 " this worked
+			cal ctrlp#setlines()
+			cal ctrlp#syntax()
+			cal s:PrtSwitcher()
+		elseif !0 " this worked
+			cal ctrlp#setlines(s:itemtype)
+			cal ctrlp#syntax()
+			cal s:PrtSwitcher()
+		endif
+	else
+	" }}}
 	cal s:BuildPrompt(1)
+	" TODO: remove: [ezequielv] {{{
+	endif
+	" }}}
+
 	if s:keyloop | cal s:KeyLoop() | en
 	return 1
 endf

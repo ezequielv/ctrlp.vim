@@ -437,6 +437,7 @@ endf
 fu! ctrlp#addfile(ch, file)
 	call add(g:ctrlp_allfiles, a:file)
 	cal s:BuildPrompt(1)
+	"? sil! cal ctrlp#statusline()
 endf
 
 fu! s:safe_printf(format, ...)
@@ -703,8 +704,9 @@ fu! s:BuildPrompt(upd)
 	if a:upd && !lazy && ( s:matches || s:regexp || exists('s:did_exp')
 		\ || str =~ '\(\\\(<\|>\)\|[*|]\)\|\(\\\:\([^:]\|\\:\)*$\)' )
 		sil! cal s:Update(str)
+		"? sil! cal ctrlp#statusline()
 	en
-	sil! cal ctrlp#statusline()
+	" prev: sil! cal ctrlp#statusline()
 	" Toggling
 	let [hiactive, hicursor, base] = s:focus
 		\ ? ['CtrlPPrtText', 'CtrlPPrtCursor', base]
@@ -926,6 +928,7 @@ fu! s:PrtClearCache()
 	en
 	let s:force = 1
 	cal s:BuildPrompt(1)
+	"? sil! cal ctrlp#statusline()
 	unl s:force
 endf
 
@@ -1038,6 +1041,7 @@ endf
 fu! s:ToggleFocus()
 	let s:focus = !s:focus
 	cal s:BuildPrompt(0)
+	sil! cal ctrlp#statusline()
 endf
 
 fu! s:ToggleRegex()
@@ -1077,11 +1081,13 @@ endf
 fu! s:ToggleMRURelative()
 	cal ctrlp#mrufiles#tgrel()
 	cal s:PrtClearCache()
+	sil! cal ctrlp#statusline() " TODO: check this is needed
 endf
 
 fu! s:PrtSwitcher()
 	let [s:force, s:matches] = [1, 1]
 	cal s:BuildPrompt(1)
+	sil! cal ctrlp#statusline()
 	unl s:force
 endf
 " - SetWD() {{{1
@@ -1330,6 +1336,7 @@ fu! s:OpenMulti(...)
 			cal s:unmarksigns()
 			unl! s:marked
 			cal s:BuildPrompt(0)
+			sil! cal ctrlp#statusline()
 		elsei !has_marked && md =~ '[axd]'
 			retu s:OpenNoMarks(md, line)
 		en
@@ -1410,6 +1417,7 @@ fu! s:OpenNoMarks(md, line)
 		endfo
 		cal s:remarksigns()
 		cal s:BuildPrompt(0)
+		sil! cal ctrlp#statusline()
 	elsei a:md == 'x'
 		let type = has_key(s:openfunc, 'arg_type') ? s:openfunc['arg_type'] : 'dict'
 		let argms = type == 'dict' ? [{ 'action': a:md, 'line': a:line }]
@@ -2184,6 +2192,7 @@ fu! s:choices(str, choices, func, args)
 		retu char
 	elsei char =~# "\\v\<Esc>|\<C-c>|\<C-g>|\<C-u>|\<C-w>|\<C-[>"
 		cal s:BuildPrompt(0)
+		sil! cal ctrlp#statusline()
 		retu 'cancel'
 	elsei char =~# "\<CR>" && a:args != []
 		retu a:args[0]
@@ -2195,6 +2204,7 @@ fu! s:getregs()
 	let char = s:textdialog('Insert from register: ')
 	if char =~# "\\v\<Esc>|\<C-c>|\<C-g>|\<C-u>|\<C-w>|\<C-[>"
 		cal s:BuildPrompt(0)
+		sil! cal ctrlp#statusline()
 		retu -1
 	elsei char =~# "\<CR>"
 		retu s:getregs()
@@ -2294,10 +2304,12 @@ fu! s:delent(rfunc)
 		\ confirm("Wipe all entries?", "&OK\n&Cancel") != 1
 		unl s:force
 		cal s:BuildPrompt(0)
+		sil! cal ctrlp#statusline()
 		retu
 	en
 	let g:ctrlp_lines = call(a:rfunc, [tbrem])
 	cal s:BuildPrompt(1)
+	sil! cal ctrlp#statusline()
 	unl s:force
 endf
 
@@ -2677,6 +2689,7 @@ fu! ctrlp#init(type, ...)
 		return 0
 	en
 	cal s:BuildPrompt(1)
+	sil! cal ctrlp#statusline()
 	if s:keyloop | cal s:KeyLoop() | en
 	return 1
 endf

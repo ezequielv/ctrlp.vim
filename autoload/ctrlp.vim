@@ -268,8 +268,20 @@ fu! s:opts(...)
 	if s:keyloop
 		let [s:lazy, s:glbs['imd']] = [0, 0]
 	en
+	unlet! s:ut_view s:ut_edit
 	if s:lazy
 		cal extend(s:glbs, { 'ut': ( s:lazy > 1 ? s:lazy : 250 ) })
+		" by default, we will use a default delay in for s:ut_view
+		let s:ut_view = get(g:, 'ctrlp_lazy_update_viewonly', 0)
+		" map: 1 -> use default
+		if s:ut_view == 1
+			let s:ut_view = 75
+		en
+		let s:ut_edit = s:glbs.ut
+		if s:ut_view >= s:ut_edit
+			unlet! s:ut_view s:ut_edit
+		en
+		" TODO: remove: testing: echomsg 'DEBUG: s:ut_view=' . string( get(s:, 'ut_view', 'unset') ) . '; s:ut_edit=' . string( get(s:, 'ut_edit', 'unset') )
 	en
 	" Extensions
 	if !( exists('extensions') && extensions == s:extensions )
@@ -436,7 +448,7 @@ endf
 
 fu! ctrlp#addfile(ch, file)
 	call add(g:ctrlp_allfiles, a:file)
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
 endf
 
 fu! s:safe_printf(format, ...)
@@ -631,7 +643,7 @@ fu! s:SplitPattern(str)
 	en
 	retu escape(pat, '~')
 endf
-" * BuildPrompt() {{{1
+" * OnUpdatedState() {{{1
 fu! s:Render(lines, pat)
 	let [&ma, lines, s:res_count] = [1, a:lines, len(a:lines)]
 	let height = min([max([s:mw_min, s:res_count]), s:winmaxh])
@@ -696,22 +708,33 @@ fu! s:ForceUpdate()
 	cal setpos('.', pos)
 endf
 
-fu! s:BuildPrompt(upd)
+" TODO: make these parameters mandatory (they're currently specified on every call)
+" optional args: upd_gsts, upd_str
+" * upd_gsts: default: 0
+" * upd_str: default: 0
+fu! s:OnUpdatedState(...)
+	let upd_gsts = a:0 > 0 ? a:1 : 0
+	let upd_str = a:0 > 1 ? a:2 : 0
 	let base = ( s:regexp ? 'r' : '>' ).( s:byfname() ? 'd' : '>' ).'> '
 	let str = escape(s:getinput(), '\')
-	let lazy = str == '' || exists('s:force') || !has('autocmd') ? 0 : s:lazy
-	if a:upd && !lazy && ( s:matches || s:regexp || exists('s:did_exp')
+	" prev: let lazy = str == '' || exists('s:force') || !has('autocmd') ? 0 : s:lazy
+	let lazy = s:lazy && !exists('s:force') && has('autocmd')
+	if upd_str && (!lazy || empty(str)) && ( s:matches || s:regexp || exists('s:did_exp')
 		\ || str =~ '\(\\\(<\|>\)\|[*|]\)\|\(\\\:\([^:]\|\\:\)*$\)' )
 		sil! cal s:Update(str)
 	en
-	sil! cal ctrlp#statusline()
+	if upd_gsts
+		sil! cal ctrlp#statusline()
+	en
 	" Toggling
 	let [hiactive, hicursor, base] = s:focus
 		\ ? ['CtrlPPrtText', 'CtrlPPrtCursor', base]
 		\ : ['CtrlPPrtBase', 'CtrlPPrtBase', tr(base, '>', '-')]
 	let hibase = 'CtrlPPrtBase'
+	if !lazy || upd_gsts || get(s:, 'ut_view', &ut) == 0
+		redr
+	en
 	" Build it
-	redr
 	let prt = copy(s:prompt)
 	cal map(prt, 'escape(v:val, ''"\'')')
 	exe 'echoh' hibase '| echon "'.base.'"
@@ -722,6 +745,24 @@ fu! s:BuildPrompt(upd)
 	if empty(prt[1]) && s:focus
 		exe 'echoh' hibase '| echon "_" | echoh None'
 	en
+endf
+" - OnPrtCursorMoved()/OnPrtStrValueEdited() {{{1
+fu! s:OnPrtCursorMoved()
+	"+ if !exists('s:ut_view') | retu | en
+	"+ if &ut == s:ut_view | retu | en
+	"+ if get(s:, 'ut_view', &ut) == &ut | retu | en
+	let ut_view = get(s:, 'ut_view', &ut)
+	if ut_view == 0 || ut_view == &ut | retu | en
+	" TODO: remove (debug): echomsg 'ctrlp: setting &ut to ' . ut_view
+	let &ut = ut_view
+endf
+
+fu! s:OnPrtStrValueEdited()
+	"+ if !exists('s:ut_edit') | retu | en
+	"+ if &ut == s:ut_edit | retu | en
+	if get(s:, 'ut_edit', &ut) == &ut | retu | en
+	" TODO: remove (debug): echomsg 'ctrlp: setting &ut to ' . s:ut_edit
+	let &ut = s:ut_edit
 endf
 " - SetDefTxt() {{{1
 fu! s:SetDefTxt()
@@ -739,14 +780,16 @@ fu! s:PrtClear()
 	if !s:focus | retu | en
 	unl! s:hstgot
 	let [s:prompt, s:matches] = [['', '', ''], 1]
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 endf
 
 fu! s:PrtAdd(char)
 	unl! s:hstgot
 	let s:act_add = 1
 	let s:prompt[0] .= a:char
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 	unl s:act_add
 endf
 
@@ -758,7 +801,8 @@ fu! s:PrtBS()
 	en
 	unl! s:hstgot
 	let [s:prompt[0], s:matches] = [substitute(s:prompt[0], '.$', '', ''), 1]
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 endf
 
 fu! s:PrtDelete()
@@ -767,7 +811,8 @@ fu! s:PrtDelete()
 	let [prt, s:matches] = [s:prompt, 1]
 	let prt[1] = matchstr(prt[2], '^.')
 	let prt[2] = substitute(prt[2], '^.', '', '')
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 endf
 
 fu! s:PrtDeleteWord()
@@ -779,7 +824,8 @@ fu! s:PrtDeleteWord()
 		\ : str =~ '\s\+$' ? matchstr(str, '^.*\S\ze\s\+$')
 		\ : str =~ '\v^(\S+|\s+)$' ? '' : str
 	let s:prompt[0] = str
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 endf
 
 fu! s:PrtInsert(...)
@@ -801,7 +847,8 @@ fu! s:PrtInsert(...)
 		\ : type ==# 'v' ? s:crvisual
 		\ : type ==# 'c' ? s:regisfilter('+')
 		\ : type ==# 'r' ? regcont : ''
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 	unl s:act_add
 endf
 
@@ -838,7 +885,8 @@ fu! s:PrtExpandDir()
 		let str .= s:findcommon(dirs, str)
 	en
 	let s:prompt[0] = exists('hasat') ? hasat[0].str : str
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
+	cal s:OnPrtStrValueEdited()
 	unl s:act_add
 endf
 " Movement {{{2
@@ -849,7 +897,8 @@ fu! s:PrtCurLeft()
 		let s:prompt = [substitute(prt[0], '.$', '', ''), matchstr(prt[0], '.$'),
 			\ prt[1] . prt[2]]
 	en
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(0, 0)
+	cal s:OnPrtCursorMoved()
 endf
 
 fu! s:PrtCurRight()
@@ -857,20 +906,23 @@ fu! s:PrtCurRight()
 	let prt = s:prompt
 	let s:prompt = [prt[0] . prt[1], matchstr(prt[2], '^.'),
 		\ substitute(prt[2], '^.', '', '')]
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(0, 0)
+	cal s:OnPrtCursorMoved()
 endf
 
 fu! s:PrtCurStart()
 	if !s:focus | retu | en
 	let str = join(s:prompt, '')
 	let s:prompt = ['', matchstr(str, '^.'), substitute(str, '^.', '', '')]
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(0, 0)
+	cal s:OnPrtCursorMoved()
 endf
 
 fu! s:PrtCurEnd()
 	if !s:focus | retu | en
 	let s:prompt = [join(s:prompt, ''), '', '']
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(0, 0)
+	cal s:OnPrtCursorMoved()
 endf
 
 fu! s:PrtSelectMove(dir)
@@ -878,7 +930,8 @@ fu! s:PrtSelectMove(dir)
 	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': wht.'k','d': wht.'j'}
 	exe 'keepj norm!' dirs[a:dir]
 	let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(0, 0)
+	cal s:OnPrtCursorMoved()
 	cal setpos('.', pos)
 endf
 
@@ -903,7 +956,8 @@ fu! s:PrtSelectJump(char)
 		en
 		exe 'keepj norm!' ( jmpln + 1 ).'G'
 		let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
-		cal s:BuildPrompt(0)
+		cal s:OnUpdatedState(0, 0)
+		cal s:OnPrtCursorMoved()
 		cal setpos('.', pos)
 	en
 endf
@@ -925,7 +979,7 @@ fu! s:PrtClearCache()
 		cal ctrlp#setlines()
 	en
 	let s:force = 1
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
 	unl s:force
 endf
 
@@ -967,7 +1021,7 @@ fu! s:PrtHistory(...)
 	let idx = idx < 0 ? 0 : idx >= hslen ? hslen > 1 ? hslen - 1 : 0 : idx
 	let s:prompt = [hst[idx], '', '']
 	let [s:hisidx, s:hstgot, s:force] = [idx, 1, 1]
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(0, 1)
 	unl s:force
 endf
 "}}}1
@@ -1037,7 +1091,7 @@ endf
 " * Toggling {{{1
 fu! s:ToggleFocus()
 	let s:focus = !s:focus
-	cal s:BuildPrompt(0)
+	cal s:OnUpdatedState(1, 0)
 endf
 
 fu! s:ToggleRegex()
@@ -1077,11 +1131,12 @@ endf
 fu! s:ToggleMRURelative()
 	cal ctrlp#mrufiles#tgrel()
 	cal s:PrtClearCache()
+	cal s:OnUpdatedState(1, 0) " TODO: check this is needed
 endf
 
 fu! s:PrtSwitcher()
 	let [s:force, s:matches] = [1, 1]
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(1, 1)
 	unl s:force
 endf
 " - SetWD() {{{1
@@ -1329,7 +1384,7 @@ fu! s:OpenMulti(...)
 		if md == 'c'
 			cal s:unmarksigns()
 			unl! s:marked
-			cal s:BuildPrompt(0)
+			cal s:OnUpdatedState(1, 0)
 		elsei !has_marked && md =~ '[axd]'
 			retu s:OpenNoMarks(md, line)
 		en
@@ -1409,7 +1464,7 @@ fu! s:OpenNoMarks(md, line)
 			let key += 1
 		endfo
 		cal s:remarksigns()
-		cal s:BuildPrompt(0)
+		cal s:OnUpdatedState(1, 0)
 	elsei a:md == 'x'
 		let type = has_key(s:openfunc, 'arg_type') ? s:openfunc['arg_type'] : 'dict'
 		let argms = type == 'dict' ? [{ 'action': a:md, 'line': a:line }]
@@ -2183,7 +2238,7 @@ fu! s:choices(str, choices, func, args)
 	if index(a:choices, char) >= 0
 		retu char
 	elsei char =~# "\\v\<Esc>|\<C-c>|\<C-g>|\<C-u>|\<C-w>|\<C-[>"
-		cal s:BuildPrompt(0)
+		cal s:OnUpdatedState(1, 0)
 		retu 'cancel'
 	elsei char =~# "\<CR>" && a:args != []
 		retu a:args[0]
@@ -2194,7 +2249,7 @@ endf
 fu! s:getregs()
 	let char = s:textdialog('Insert from register: ')
 	if char =~# "\\v\<Esc>|\<C-c>|\<C-g>|\<C-u>|\<C-w>|\<C-[>"
-		cal s:BuildPrompt(0)
+		cal s:OnUpdatedState(1, 0)
 		retu -1
 	elsei char =~# "\<CR>"
 		retu s:getregs()
@@ -2293,11 +2348,11 @@ fu! s:delent(rfunc)
 	if tbrem == [] && ( has('dialog_gui') || has('dialog_con') ) &&
 		\ confirm("Wipe all entries?", "&OK\n&Cancel") != 1
 		unl s:force
-		cal s:BuildPrompt(0)
+		cal s:OnUpdatedState(1, 0)
 		retu
 	en
 	let g:ctrlp_lines = call(a:rfunc, [tbrem])
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(1, 1)
 	unl s:force
 endf
 
@@ -2676,7 +2731,7 @@ fu! ctrlp#init(type, ...)
 	if shouldExitSingle && s:ExitIfSingleCandidate()
 		return 0
 	en
-	cal s:BuildPrompt(1)
+	cal s:OnUpdatedState(1, 1)
 	if s:keyloop | cal s:KeyLoop() | en
 	return 1
 endf

@@ -281,7 +281,6 @@ fu! s:opts(...)
 		if s:ut_view >= s:ut_edit
 			unlet! s:ut_view s:ut_edit
 		en
-		" TODO: remove: testing: echomsg 'DEBUG: s:ut_view=' . string( get(s:, 'ut_view', 'unset') ) . '; s:ut_edit=' . string( get(s:, 'ut_edit', 'unset') )
 	en
 	" Extensions
 	if !( exists('extensions') && extensions == s:extensions )
@@ -717,7 +716,6 @@ fu! s:OnUpdatedState(...)
 	let upd_str = a:0 > 1 ? a:2 : 0
 	let base = ( s:regexp ? 'r' : '>' ).( s:byfname() ? 'd' : '>' ).'> '
 	let str = escape(s:getinput(), '\')
-	" prev: let lazy = str == '' || exists('s:force') || !has('autocmd') ? 0 : s:lazy
 	let lazy = s:lazy && !exists('s:force') && has('autocmd')
 	if upd_str && (!lazy || empty(str)) && ( s:matches || s:regexp || exists('s:did_exp')
 		\ || str =~ '\(\\\(<\|>\)\|[*|]\)\|\(\\\:\([^:]\|\\:\)*$\)' )
@@ -748,20 +746,13 @@ fu! s:OnUpdatedState(...)
 endf
 " - OnPrtCursorMoved()/OnPrtStrValueEdited() {{{1
 fu! s:OnPrtCursorMoved()
-	"+ if !exists('s:ut_view') | retu | en
-	"+ if &ut == s:ut_view | retu | en
-	"+ if get(s:, 'ut_view', &ut) == &ut | retu | en
 	let ut_view = get(s:, 'ut_view', &ut)
 	if ut_view == 0 || ut_view == &ut | retu | en
-	" TODO: remove (debug): echomsg 'ctrlp: setting &ut to ' . ut_view
 	let &ut = ut_view
 endf
 
 fu! s:OnPrtStrValueEdited()
-	"+ if !exists('s:ut_edit') | retu | en
-	"+ if &ut == s:ut_edit | retu | en
 	if get(s:, 'ut_edit', &ut) == &ut | retu | en
-	" TODO: remove (debug): echomsg 'ctrlp: setting &ut to ' . s:ut_edit
 	let &ut = s:ut_edit
 endf
 " - SetDefTxt() {{{1

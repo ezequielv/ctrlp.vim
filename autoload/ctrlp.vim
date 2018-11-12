@@ -706,8 +706,6 @@ fu! s:ForceUpdate()
 	sil! cal s:Update(escape(s:getinput(), '\'))
 	cal setpos('.', pos)
 
-	"+ cal s:OnUpdatedState(1, 0) " TODO: too slow?
-	"? redr
 	cal s:OnUpdatedState(0, 0)
 endf
 

@@ -705,6 +705,10 @@ fu! s:ForceUpdate()
 	let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
 	sil! cal s:Update(escape(s:getinput(), '\'))
 	cal setpos('.', pos)
+
+	"+ cal s:OnUpdatedState(1, 0) " TODO: too slow?
+	"? redr
+	cal s:OnUpdatedState(0, 0)
 endf
 
 " TODO: make these parameters mandatory (they're currently specified on every call)

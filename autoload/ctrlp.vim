@@ -153,6 +153,7 @@ let [s:lcmap, s:prtmaps] = ['nn <buffer> <silent>', {
 	\ 'MarkToOpen()':         ['<c-z>'],
 	\ 'OpenMulti()':          ['<c-o>'],
 	\ 'YankLine()':           [],
+	\ 'ScreenRefresh()':      ['<c-_>'],
 	\ 'PrtExit()':            ['<esc>', '<c-c>', '<c-g>'],
 	\ }]
 
@@ -745,6 +746,12 @@ fu! s:OnUpdatedState(...)
 	if empty(prt[1]) && s:focus
 		exe 'echoh' hibase '| echon "_" | echoh None'
 	en
+endf
+
+" map-friendly version (no parameters)
+fu! s:ScreenRefresh()
+	" MAYBE: specify 1 for upd_str, too.
+	cal s:OnUpdatedState(1, 0)
 endf
 " - OnPrtCursorMoved()/OnPrtStrValueEdited() {{{1
 fu! s:OnPrtCursorMoved()

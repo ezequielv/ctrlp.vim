@@ -727,6 +727,30 @@ el
 	endf
 en
 
+" TODO: call this later (replace calls to s:GetCurrentCursorPos() and setpos()
+" with these, etc.) {{{
+fu! s:GetWinCursorState()
+	let cursor_pos = s:GetCurrentCursorPos()
+	let wincurstate = {
+				\ 'cursor_pos': cursor_pos,
+				\ }
+
+	sil normal! H0
+	wincurstate.win_h_pos = s:GetCurrentCursorPos()
+
+	"? sil normal! ``
+	cal setpos('.', cursor_pos)
+
+	return wincurstate
+endf
+
+fu! s:SetWinCursorState(wincurstate)
+	cal setpos('.', a:wincurstate.win_h_pos)
+	sil! normal! zt
+	cal setpos('.', a:wincurstate.cursor_pos)
+endf
+" }}}
+
 fu! s:ForceUpdate()
 	" prev: sil normal! H0
 	" prev: let pos_h = exists('*getcurpos') ? getcurpos() : getpos('.')

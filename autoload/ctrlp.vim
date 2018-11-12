@@ -717,8 +717,18 @@ fu! s:Update(str)
 	return lines
 endf
 
+if exists('*getcurpos')
+	fu! s:GetCurrentCursorPos()
+		return getcurpos()
+	endf
+el
+	fu! s:GetCurrentCursorPos()
+		return getpos('.')
+	endf
+en
+
 fu! s:ForceUpdate()
-	let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
+	let pos = s:GetCurrentCursorPos()
 	sil! cal s:Update(escape(s:getinput(), '\'))
 	cal setpos('.', pos)
 
@@ -944,7 +954,7 @@ fu! s:PrtSelectMove(dir)
 	let wht = winheight(0)
 	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': wht.'k','d': wht.'j'}
 	exe 'keepj norm!' dirs[a:dir]
-	let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
+	let pos = s:GetCurrentCursorPos()
 	cal s:OnUpdatedState(0, 0)
 	cal s:OnPrtCursorMoved()
 	cal setpos('.', pos)
@@ -970,7 +980,7 @@ fu! s:PrtSelectJump(char)
 			let [jmpln, s:jmpchr] = [npos == -1 ? pos : npos, [chr, npos]]
 		en
 		exe 'keepj norm!' ( jmpln + 1 ).'G'
-		let pos = exists('*getcurpos') ? getcurpos() : getpos('.')
+		let pos = s:GetCurrentCursorPos()
 		cal s:OnUpdatedState(0, 0)
 		cal s:OnPrtCursorMoved()
 		cal setpos('.', pos)

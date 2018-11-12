@@ -157,6 +157,21 @@ let [s:lcmap, s:prtmaps] = ['nn <buffer> <silent>', {
 	\ 'PrtExit()':            ['<esc>', '<c-c>', '<c-g>'],
 	\ }]
 
+if 0 " TODO: remove (testing)
+	function! s:PretendToMove()
+		cal s:OnUpdatedState(0, 0)
+		cal s:OnPrtCursorMoved()
+	endfunction
+
+	function! s:DoNothing()
+	endfunction
+
+	call extend(s:prtmaps, {
+		\ 'PretendToMove()':      ['='],
+		\ 'DoNothing()':          ['0'],
+		\ }, "force")
+endif
+
 if !has('gui_running')
 	cal add(s:prtmaps['PrtBS()'], remove(s:prtmaps['PrtCurLeft()'], 0))
 en

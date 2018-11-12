@@ -728,9 +728,23 @@ el
 en
 
 fu! s:ForceUpdate()
-	let pos = s:GetCurrentCursorPos()
+	" prev: sil normal! H0
+	" prev: let pos_h = exists('*getcurpos') ? getcurpos() : getpos('.')
+	" prev: sil normal! ''
+	" prev: let pos_c = exists('*getcurpos') ? getcurpos() : getpos('.')
+	let pos_c = s:GetCurrentCursorPos()
+	sil normal! H0
+	let pos_h = s:GetCurrentCursorPos()
+	" ref: winheight(), 'winheight', 'winminheight'
+	let wh = &wh
+	let &wh = winheight(0)
+
 	sil! cal s:Update(escape(s:getinput(), '\'))
-	cal setpos('.', pos)
+
+	cal setpos('.', pos_h)
+	sil! normal! zt
+	cal setpos('.', pos_c)
+	let &wh = wh
 
 	cal s:OnUpdatedState(0, 0)
 endf

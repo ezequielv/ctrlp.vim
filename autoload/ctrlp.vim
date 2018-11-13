@@ -751,22 +751,14 @@ endf
 " }}}
 
 fu! s:ForceUpdate()
-	" prev: sil normal! H0
-	" prev: let pos_h = exists('*getcurpos') ? getcurpos() : getpos('.')
-	" prev: sil normal! ''
-	" prev: let pos_c = exists('*getcurpos') ? getcurpos() : getpos('.')
-	let pos_c = s:GetCurrentCursorPos()
-	sil normal! H0
-	let pos_h = s:GetCurrentCursorPos()
-	" ref: winheight(), 'winheight', 'winminheight'
+	let wincrstate = s:GetWinCursorState()
+	" NOTE: see also (':help'): winheight(), 'winheight', 'winminheight'
 	let wh = &wh
 	let &wh = winheight(0)
 
 	sil! cal s:Update(escape(s:getinput(), '\'))
 
-	cal setpos('.', pos_h)
-	sil! normal! zt
-	cal setpos('.', pos_c)
+	cal s:SetWinCursorState(wincrstate)
 	let &wh = wh
 
 	cal s:OnUpdatedState(0, 0)
@@ -991,10 +983,10 @@ fu! s:PrtSelectMove(dir)
 	let wht = winheight(0)
 	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': wht.'k','d': wht.'j'}
 	exe 'keepj norm!' dirs[a:dir]
-	let pos = s:GetCurrentCursorPos()
+	let wincrstate = s:GetWinCursorState()
 	cal s:OnUpdatedState(0, 0)
 	cal s:OnPrtCursorMoved()
-	cal setpos('.', pos)
+	cal s:SetWinCursorState(wincrstate)
 endf
 
 fu! s:PrtSelectJump(char)
@@ -1017,10 +1009,10 @@ fu! s:PrtSelectJump(char)
 			let [jmpln, s:jmpchr] = [npos == -1 ? pos : npos, [chr, npos]]
 		en
 		exe 'keepj norm!' ( jmpln + 1 ).'G'
-		let pos = s:GetCurrentCursorPos()
+		let wincrstate = s:GetWinCursorState()
 		cal s:OnUpdatedState(0, 0)
 		cal s:OnPrtCursorMoved()
-		cal setpos('.', pos)
+		cal s:SetWinCursorState(wincrstate)
 	en
 endf
 " Misc {{{2

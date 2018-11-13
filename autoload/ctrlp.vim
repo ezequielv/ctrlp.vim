@@ -736,7 +736,7 @@ fu! s:GetWinCursorState()
 				\ }
 
 	sil normal! H0
-	wincurstate.win_h_pos = s:GetCurrentCursorPos()
+	let wincurstate.win_h_pos = s:GetCurrentCursorPos()
 
 	"? sil normal! ``
 	cal setpos('.', cursor_pos)

@@ -980,8 +980,7 @@ fu! s:PrtCurEnd()
 endf
 
 fu! s:PrtSelectMove(dir)
-	let wht = winheight(0)
-	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': wht.'k','d': wht.'j'}
+	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': "\<C-b>",'d': "\<C-f>"}
 	exe 'keepj norm!' dirs[a:dir]
 	let wincrstate = s:GetWinCursorState()
 	cal s:OnUpdatedState(0, 0)

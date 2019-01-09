@@ -66,6 +66,25 @@ fu! ctrlp#utils#writecache(lines, ...)
 	en
 endf
 
+" args:
+"  - set_ignore_wildignore (default: 0)
+fu! s:wig_state_get(...)
+	let retval = {
+				\ 'wig': &wig,
+				\ 'su': &su,
+				\ }
+	if a:0 && a:1
+		" prev: set wig= su=
+		set wig=
+	en
+	retu retval
+endf
+
+fu! s:wig_state_set(wig_state)
+	let &wig = a:wig_state['wig']
+	let &su = a:wig_state['su']
+endf
+
 fu! ctrlp#utils#glob(...)
 	let path = ctrlp#utils#fnesc(a:1, 'g')
 	retu s:wig_cond ? glob(path, a:2) : glob(path)

@@ -87,11 +87,39 @@ endf
 
 fu! ctrlp#utils#glob(...)
 	let path = ctrlp#utils#fnesc(a:1, 'g')
-	retu s:wig_cond ? glob(path, a:2) : glob(path)
+	" prev: retu s:wig_cond ? glob(path, a:2) : glob(path)
+	let glob_flag = a:2
+	if s:wig_cond
+		retu glob(path, glob_flag)
+	en
+	try
+		if glob_flag
+			let wig_state = s:wig_state_get(!0)
+		en
+		retu glob(path)
+	fina
+		if glob_flag
+			cal s:wig_state_set(wig_state)
+		en
+	endt
 endf
 
 fu! ctrlp#utils#globpath(...)
-	retu call('globpath', s:wig_cond ? a:000 : a:000[:1])
+	" prev: retu cal('globpath', s:wig_cond ? a:000 : a:000[:1])
+	if s:wig_cond
+		retu cal('globpath', a:000)
+	en
+	let glob_flag = get(a:000, 2, 0)
+	try
+		if glob_flag
+			let wig_state = s:wig_state_get(!0)
+		en
+		retu cal('globpath', a:000[:1])
+	fina
+		if glob_flag
+			cal s:wig_state_set(wig_state)
+		en
+	endt
 endf
 
 fu! ctrlp#utils#fnesc(path, type, ...)

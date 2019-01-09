@@ -105,16 +105,16 @@ fu! ctrlp#utils#glob(...)
 endf
 
 fu! ctrlp#utils#globpath(...)
-	" prev: retu cal('globpath', s:wig_cond ? a:000 : a:000[:1])
+	" prev: retu call('globpath', s:wig_cond ? a:000 : a:000[:1])
 	if s:wig_cond
-		retu cal('globpath', a:000)
+		retu call('globpath', a:000)
 	en
 	let glob_flag = get(a:000, 2, 0)
 	try
 		if glob_flag
 			let wig_state = s:wig_state_get(!0)
 		en
-		retu cal('globpath', a:000[:1])
+		retu call('globpath', a:000[:1])
 	fina
 		if glob_flag
 			cal s:wig_state_set(wig_state)

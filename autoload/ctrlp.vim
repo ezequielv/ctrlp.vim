@@ -500,6 +500,7 @@ fu! s:UserCmd(lscmd)
 	el
 		let g:ctrlp_allfiles = split(system(s:safe_printf(lscmd, path)), "\n")
 	en
+	"- DEBUG: verbose echomsg printf( 'DEBUG: s:UserCmd(): cmd=%s; output=%s', string(lscmd), string(g:ctrlp_allfiles))
 	if exists('+ssl') && exists('ssl')
 		let &ssl = ssl
 		cal map(g:ctrlp_allfiles, 'tr(v:val, "\\", "/")')
@@ -543,6 +544,7 @@ fu! s:lsCmd()
 			if pair[0] == fndroot[0] | brea | en
 		endfo
 		let s:vcscmd = s:lash == '\'
+		"- DEBUG: verbose echomsg 'DEBUG: s:lsCmd(): returning: ' . string(pair[1]) | call sleep(5)
 		retu pair[1]
 	en
 endf
@@ -1884,15 +1886,18 @@ fu! s:findroot(curr, mark, depth, type)
 	en
 	if fnd
 		if !a:type | cal ctrlp#setdir(a:curr) | en
+		"- verbose echomsg printf( 'DEBUG: s:findroot(): returning %s', string([exists('markr') ? markr : a:mark, a:curr]) )
 		retu [exists('markr') ? markr : a:mark, a:curr]
 	elsei depth > s:maxdepth
 		cal ctrlp#setdir(s:cwd)
 	el
 		let parent = s:getparent(a:curr)
 		if parent != a:curr
+			"- verbose echomsg printf( 'DEBUG: s:findroot(): returning %s', string(s:findroot(parent, a:mark, depth, a:type)) )
 			retu s:findroot(parent, a:mark, depth, a:type)
 		en
 	en
+	"- verbose echomsg printf( 'DEBUG: s:findroot(): returning %s', string([]) )
 	retu []
 endf
 

@@ -530,7 +530,7 @@ fu! s:lsCmd()
 		retu cmd[1]
 	elsei type(cmd) == 4 && ( has_key(cmd, 'types') || has_key(cmd, 'fallback') )
 		let fndroot = []
-		if has_key(cmd, 'types') && (!empty(cmd['types']))
+		if !empty(get(cmd, 'types'))
 			" NOTE: allow s:usrcmd (g:ctrlp_user_command) ['types'] to be either a
 			" dictionary (backwards-compatible) for which the keys are not used, or
 			" just a list, which gives a guaranteed processing order (to

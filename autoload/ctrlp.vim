@@ -530,8 +530,12 @@ fu! s:lsCmd()
 		retu cmd[1]
 	elsei type(cmd) == 4 && ( has_key(cmd, 'types') || has_key(cmd, 'fallback') )
 		let fndroot = []
-		if has_key(cmd, 'types') && cmd['types'] != {}
-			let [markrs, cmdtypes] = [[], values(cmd['types'])]
+		if has_key(cmd, 'types') && (!empty(cmd['types']))
+			" NOTE: allow s:usrcmd (g:ctrlp_user_command) ['types'] to be either a
+			" dictionary (backwards-compatible) for which the keys are not used, or
+			" just a list, which gives a guaranteed processing order (to
+			" s:findroot()) and therefore to the result of this function.
+			let [markrs, cmdtypes] = [[], ((type(cmd['types']) == 4) ? values(cmd['types']) : cmd['types'])]
 			for pair in cmdtypes
 				cal add(markrs, pair[0])
 			endfo

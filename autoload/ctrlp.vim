@@ -2413,7 +2413,11 @@ fu! s:delent(rfunc)
 		cal s:OnUpdatedState(1, 0)
 		retu
 	en
+	" DEBUG: echomsg printf( 'DEBUG: lines before removal. len=%d; list=%s', len(g:ctrlp_lines), string(g:ctrlp_lines) )
+	" DEBUG: echomsg printf( 'DEBUG: lines before removal. len=%d; edge_items=%s; tbrem=%s', len(g:ctrlp_lines), string(g:ctrlp_lines[:5]), string(tbrem) )
 	let g:ctrlp_lines = call(a:rfunc, [tbrem])
+	" DEBUG: echomsg printf( 'DEBUG: lines after removal. len=%d; list=%s', len(g:ctrlp_lines), string(g:ctrlp_lines) )
+	" DEBUG: echomsg printf( 'DEBUG: lines after removal. len=%d; edge_items=%s; tbrem=%s', len(g:ctrlp_lines), string(g:ctrlp_lines[:5]), string(tbrem) )
 	cal s:OnUpdatedState(1, 1)
 	unl s:force
 endf

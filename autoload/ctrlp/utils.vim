@@ -179,6 +179,41 @@ fu! ctrlp#utils#shellescape(p)
 	en
 	return s:shellescape(a:p)
 endf
+
+let s:fnmflags_abs = ':p'
+let s:fnmflags_home = ':p:~'
+
+fu! ctrlp#utils#modifypathname(pathname, modify_str)
+	let pathname = a:pathname
+	let modify_str = a:modify_str
+
+	if !empty(modify_str)
+		let fnamemodflags = ''
+		if modify_str[0] ==# ':' " fnamemodify() flags
+			let fnamemodflags = modify_str
+		elsei modify_str ==# 'u' " [u]ser
+			let fnamemodflags = ':.'
+		elsei modify_str ==# 'a' " [a]bsolute path
+			let fnamemodflags = s:fnmflags_abs
+		elsei modify_str ==# 'h' " based on [h]ome dir
+			let fnamemodflags = s:fnmflags_home
+		elsei modify_str =~# '\v^[fc]$' " [f]ile, [c]ache
+			let fnamemodflags = get(g:, 'ctrlp_tilde_homedir', 0) ? s:fnmflags_home : s:fnmflags_abs
+		el
+			echoe printf('ERROR: ctrlp#bookmarkdir::s:parts(): invalid modify_str arg: %s', modify_str)
+		en
+		if !empty(fnamemodflags)
+			let pathname = fnamemodify(pathname, fnamemodflags)
+		en
+	en
+	retu pathname
+endf
+
+" done: remove this function, and replace it with direct calls to ctrlp#utils#modifypathname()
+" prev: fu! ctrlp#utils#normalizepathname(pathname)
+" prev: 	" prev: retu fnamemodify(a:pathname, get(g:, 'ctrlp_tilde_homedir', 0) ? ':p:~' : ':p')
+" prev: 	retu ctrlp#utils#modifypathname(a:pathname, 'f')
+" prev: endf
 "}}}
 
 " vim:fen:fdm=marker:fmr={{{,}}}:fdl=0:fdc=1:ts=2:sw=2:sts=2

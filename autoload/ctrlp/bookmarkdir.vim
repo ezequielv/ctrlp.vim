@@ -132,11 +132,11 @@ fu! ctrlp#bookmarkdir#add(bang, dir, ...)
 endf
 
 fu! ctrlp#bookmarkdir#remove(entries)
-	cal s:process(a:entries, ':p')
-	cal s:writecache(a:entries == [] ? [] :
-		\ filter(s:getbookmarks(), 'index(a:entries, v:val) < 0'))
+	let entries = s:process(copy(a:entries), 'a')
+	cal s:writecache(entries == [] ? [] :
+		\ filter(s:getbookmarks(), 'index(entries, s:modify(v:val, "a")) < 0'))
 	cal s:setentries()
-	retu s:process(copy(s:bookmarks[1]), ':.')
+	retu s:process(copy(s:bookmarks[1]), 'u')
 endf
 
 fu! ctrlp#bookmarkdir#id()

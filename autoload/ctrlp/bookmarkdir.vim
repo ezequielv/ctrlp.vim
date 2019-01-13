@@ -50,8 +50,20 @@ endf
 
 fu! s:savebookmark(name, cwd)
 	let cwds = exists('+ssl') ? [tr(a:cwd, '\', '/'), tr(a:cwd, '/', '\')] : [a:cwd]
-	let entries = filter(s:getbookmarks(), 'index(cwds, s:parts(v:val)[1]) < 0')
-	cal s:writecache(insert(entries, a:name.'	'.a:cwd))
+	" also look for all the acceptable flavours that could have been written to
+	" this file in previous runs of this plugin
+	" prev: " prev: let cwds = cwds_base
+	" prev: let cwds = (
+	" prev: 			\		cwds_base +
+	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "f")') +
+	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "h")') +
+	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "a")') )
+	call map(cwds, 'ctrlp#utils#modifypathname(v:val, "a")')
+	" MAYBE: use s:setentries() and s:bookmarks[1] instead of calling s:getbookmarks()
+	"  IDEA: do this in other places, too
+	" prev: let entries = filter(s:getbookmarks(), 'index(cwds, s:parts(v:val)[1]) < 0')
+	let entries = filter(s:getbookmarks(), 'index(cwds, ctrlp#utils#modifypathname(s:parts(v:val)[1], "a")) < 0')
+	cal s:writecache(insert(entries, a:name.'	'.ctrlp#utils#modifypathname(a:cwd, 'f')))
 endf
 
 fu! s:setentries()

@@ -44,6 +44,9 @@ fu! s:writecache(lines)
 	cal ctrlp#utils#writecache(a:lines, s:cadir, s:cafile)
 endf
 
+" TODO: make this function call s:setentries() and return s:bookmarks[1], so
+" we can always benefit from using a cached file copy
+" TODO: move the ctrlp#utils#readfile() inside s:setentries()
 fu! s:getbookmarks()
 	retu ctrlp#utils#readfile(s:cachefile())
 endf

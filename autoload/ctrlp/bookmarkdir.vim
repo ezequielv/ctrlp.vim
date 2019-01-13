@@ -153,9 +153,10 @@ fu! ctrlp#bookmarkdir#add(bang, dir, ...)
 endf
 
 fu! ctrlp#bookmarkdir#remove(entries)
-	let entries = s:process(copy(a:entries), 'a')
-	cal s:writecache(entries == [] ? [] :
-		\ filter(s:getbookmarks(), 'index(entries, s:modify(v:val, "a")) < 0'))
+	let expr_vval_getentrydir = 'ctrlp#utils#modifypathname(s:parts(v:val)[1], "a")'
+	let dirstoremove = map(copy(a:entries), expr_vval_getentrydir)
+	cal s:writecache(empty(dirstoremove) ? [] :
+		\ filter(s:getbookmarks(), 'index(dirstoremove, ' . expr_vval_getentrydir . ') < 0'))
 	cal s:setentries()
 	retu s:process(copy(s:bookmarks[1]), 'u')
 endf

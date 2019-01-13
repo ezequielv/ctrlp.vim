@@ -44,11 +44,21 @@ fu! s:writecache(lines)
 	cal ctrlp#utils#writecache(a:lines, s:cadir, s:cafile)
 endf
 
-" TODO: make this function call s:setentries() and return s:bookmarks[1], so
-" we can always benefit from using a cached file copy
-" TODO: move the ctrlp#utils#readfile() inside s:setentries()
+" TODO: put the improvements described here in a new branch:
+"  dev_ezequielv-feat-bookmkarkdirs_use_cached_bookmarks_asmuchaspossible-01-01_01
+" TODO: make this function always return a copy of the cached list, so it
+" needs to call s:setentries() (only caller?).
+" TODO: remove all other calls to s:setentries() (including the one in
+" init()), and replace (where needed) usage of s:bookmarks[1] for
+" s:getbookmarks().
 fu! s:getbookmarks()
 	retu ctrlp#utils#readfile(s:cachefile())
+	"? " prev: " prev: retu ctrlp#utils#readfile(s:cachefile())
+	"? " prev: retu copy(s:bookmarks[1])
+	"? cal s:setentries()
+	"? retu copy(s:bookmarks[1])
+	"? " MAYBE: retu s:setentries()
+	"? " MAYBE: retu copy(s:setentries()) " when that returns the original s:bookmarks[1]
 endf
 
 fu! s:savebookmark(name, cwd)
@@ -64,7 +74,10 @@ fu! s:setentries()
 	let time = getftime(s:cachefile())
 	if !( exists('s:bookmarks') && time == s:bookmarks[0] )
 		let s:bookmarks = [time, s:getbookmarks()]
+		"? " prev: let s:bookmarks = [time, s:getbookmarks()]
+		"? let s:bookmarks = [time, ctrlp#utils#readfile(s:cachefile())]
 	en
+	" MAYBE: retu copy(s:bookmarks[1])
 endf
 
 fu! s:parts(str, ...)

@@ -136,11 +136,11 @@ endf
 fu! ctrlp#bookmarkdir#init()
 	cal s:setentries()
 	cal s:syntax()
-	retu s:process(copy(s:bookmarks[1]), ':.')
+	retu s:process(copy(s:bookmarks[1]), 'u')
 endf
 
 fu! ctrlp#bookmarkdir#accept(mode, str)
-	let parts = s:parts(s:modify(a:str, ':p'))
+	let parts = s:parts(s:modify(a:str, 'a'))
 	cal call('s:savebookmark', parts)
 	if a:mode =~ 't\|v\|h'
 		cal ctrlp#exit()
@@ -154,9 +154,22 @@ fu! ctrlp#bookmarkdir#accept(mode, str)
 endf
 
 fu! ctrlp#bookmarkdir#add(bang, dir, ...)
-	let ctrlp_tilde_homedir = get(g:, 'ctrlp_tilde_homedir', 0)
-	let cwd = fnamemodify(getcwd(), ctrlp_tilde_homedir ? ':p:~' : ':p')
-	let dir = fnamemodify(a:dir, ctrlp_tilde_homedir ? ':p:~' : ':p')
+	" prev: " prev: let ctrlp_tilde_homedir = get(g:, 'ctrlp_tilde_homedir', 0)
+	" prev: " prev: let cwd = fnamemodify(getcwd(), ctrlp_tilde_homedir ? ':p:~' : ':p')
+	" prev: " prev: let dir = fnamemodify(a:dir, ctrlp_tilde_homedir ? ':p:~' : ':p')
+	" prev: let cwd = ctrlp#utils#normalizepathname(getcwd())
+	" prev: let dir = ctrlp#utils#normalizepathname(a:dir)
+	let cwd = ctrlp#utils#modifypathname(getcwd(), 'f')
+	let dir = ctrlp#utils#modifypathname(a:dir, 'f')
+	" TODO: fix this code (read 'NOTE:' below)
+	" NOTE: I don't think that an empty a:dir value will map to an empty string
+	" with the original filename-modifiers (':p', ':p:~'), so the condition:
+	"  dir != ''
+	" would always be true.
+	" example:
+	"  :for t_s1 in [':p', ':p:~'] | echo printf('modifiers: %s; result: %s', string(t_s1), string(fnamemodify('', t_s1))) | endfor
+	"   modifiers: ':p'; result: '/home/user/'
+	"   modifiers: ':p:~'; result: '~/'
 	if a:bang == '!'
 		let cwd = dir != '' ? dir : cwd
 		let name = a:0 && a:1 != '' ? a:1 : cwd

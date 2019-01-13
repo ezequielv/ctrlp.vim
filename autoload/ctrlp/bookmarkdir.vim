@@ -53,18 +53,9 @@ endf
 
 fu! s:savebookmark(name, cwd)
 	let cwds = exists('+ssl') ? [tr(a:cwd, '\', '/'), tr(a:cwd, '/', '\')] : [a:cwd]
-	" also look for all the acceptable flavours that could have been written to
-	" this file in previous runs of this plugin
-	" prev: " prev: let cwds = cwds_base
-	" prev: let cwds = (
-	" prev: 			\		cwds_base +
-	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "f")') +
-	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "h")') +
-	" prev: 			\		map(copy(cwds_base), 'ctrlp#utils#modifypathname(v:val, "a")') )
 	call map(cwds, 'ctrlp#utils#modifypathname(v:val, "a")')
 	" MAYBE: use s:setentries() and s:bookmarks[1] instead of calling s:getbookmarks()
 	"  IDEA: do this in other places, too
-	" prev: let entries = filter(s:getbookmarks(), 'index(cwds, s:parts(v:val)[1]) < 0')
 	let entries = filter(s:getbookmarks(), 'index(cwds, ctrlp#utils#modifypathname(s:parts(v:val)[1], "a")) < 0')
 	cal s:writecache(insert(entries, a:name.'	'.ctrlp#utils#modifypathname(a:cwd, 'f')))
 endf
@@ -76,41 +67,8 @@ fu! s:setentries()
 	en
 endf
 
-" prev: fu! s:parts(str, ...)
-" prev: 	let mlist = matchlist(a:str, '\v([^\t]+)\t(.*)$')
-" prev: 	" prev: retu mlist != [] ? mlist[1:2] : ['', '']
-" prev: 	if empty(mlist)
-" prev: 		retu ['', '']
-" prev: 	en
-" prev: 	let mlist = mlist[1:2]
-" prev: 	if a:0 == 0
-" prev: 		retu mlist
-" prev: 	en
-" prev: 
-" prev: 	let dir = mlist[1]
-" prev: 	" prev: let modify_str = get(a:000, 0, '')
-" prev: 	let modify_str = a:1
-" prev: 	if !empty(modify_str)
-" prev: 		let fnamemodflags = ''
-" prev: 		if modify_str[0] ==# ':'
-" prev: 			let fnamemodflags = modify_str
-" prev: 		elsei modify_str ==# 'u'
-" prev: 			let fnamemodflags = ':.'
-" prev: 		elsei modify_str ==# 'f'
-" prev: 			let dir = ctrlp#utils#normalizepathname(dir)
-" prev: 		el
-" prev: 			echoe printf('ERROR: ctrlp#bookmarkdir::s:parts(): invalid modify_str arg: %s', modify_str)
-" prev: 		en
-" prev: 		if !empty(fnamemodflags)
-" prev: 			let dir = fnamemodify(dir, fnamemodflags)
-" prev: 		en
-" prev: 		let mlist[1] = dir
-" prev: 	en
-" prev: 	retu mlist
-" prev: endf
 fu! s:parts(str, ...)
 	let mlist = matchlist(a:str, '\v([^\t]+)\t(.*)$')
-	" prev: retu mlist != [] ? mlist[1:2] : ['', '']
 	if empty(mlist)
 		retu ['', '']
 	en
@@ -128,7 +86,6 @@ endf
 
 fu! s:modify(entry, type)
 	let [name, dir] = s:parts(a:entry, a:type)
-	" prev: let dir = fnamemodify(dir, a:type)
 	retu name.'	'.( dir == '' ? '.' : dir )
 endf
 
@@ -169,11 +126,6 @@ fu! ctrlp#bookmarkdir#accept(mode, str)
 endf
 
 fu! ctrlp#bookmarkdir#add(bang, dir, ...)
-	" prev: " prev: let ctrlp_tilde_homedir = get(g:, 'ctrlp_tilde_homedir', 0)
-	" prev: " prev: let cwd = fnamemodify(getcwd(), ctrlp_tilde_homedir ? ':p:~' : ':p')
-	" prev: " prev: let dir = fnamemodify(a:dir, ctrlp_tilde_homedir ? ':p:~' : ':p')
-	" prev: let cwd = ctrlp#utils#normalizepathname(getcwd())
-	" prev: let dir = ctrlp#utils#normalizepathname(a:dir)
 	let cwd = ctrlp#utils#modifypathname(getcwd(), 'f')
 	let dir = ctrlp#utils#modifypathname(a:dir, 'f')
 	" TODO: fix this code (read 'NOTE:' below)

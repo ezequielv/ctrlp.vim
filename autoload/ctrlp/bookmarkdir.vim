@@ -44,40 +44,35 @@ fu! s:writecache(lines)
 	cal ctrlp#utils#writecache(a:lines, s:cadir, s:cafile)
 endf
 
-" TODO: put the improvements described here in a new branch:
+" done: put the improvements described here in a new branch:
 "  dev_ezequielv-feat-bookmkarkdirs_use_cached_bookmarks_asmuchaspossible-01-01_01
-" TODO: make this function always return a copy of the cached list, so it
+" done: make this function always return a copy of the cached list, so it
 " needs to call s:setentries() (only caller?).
-" TODO: remove all other calls to s:setentries() (including the one in
+" done: remove all other calls to s:setentries() (including the one in
 " init()), and replace (where needed) usage of s:bookmarks[1] for
 " s:getbookmarks().
 fu! s:getbookmarks()
-	retu ctrlp#utils#readfile(s:cachefile())
-	"? " prev: " prev: retu ctrlp#utils#readfile(s:cachefile())
-	"? " prev: retu copy(s:bookmarks[1])
-	"? cal s:setentries()
-	"? retu copy(s:bookmarks[1])
-	"? " MAYBE: retu s:setentries()
-	"? " MAYBE: retu copy(s:setentries()) " when that returns the original s:bookmarks[1]
+	" prev: retu ctrlp#utils#readfile(s:cachefile())
+	cal s:setentries()
+	" prev: retu copy(s:bookmarks[1])
+	let entries = copy(s:bookmarks[1])
+	retu entries
 endf
 
 fu! s:savebookmark(name, cwd)
 	let cwds = exists('+ssl') ? [tr(a:cwd, '\', '/'), tr(a:cwd, '/', '\')] : [a:cwd]
 	call map(cwds, 'ctrlp#utils#modifypathname(v:val, "a")')
-	" MAYBE: use s:setentries() and s:bookmarks[1] instead of calling s:getbookmarks()
-	"  IDEA: do this in other places, too
 	let entries = filter(s:getbookmarks(), 'index(cwds, ctrlp#utils#modifypathname(s:parts(v:val)[1], "a")) < 0')
 	cal s:writecache(insert(entries, a:name.'	'.ctrlp#utils#modifypathname(a:cwd, 'f')))
 endf
 
 fu! s:setentries()
-	let time = getftime(s:cachefile())
+	let cachefile = s:cachefile()
+	let time = getftime(cachefile)
 	if !( exists('s:bookmarks') && time == s:bookmarks[0] )
-		let s:bookmarks = [time, s:getbookmarks()]
-		"? " prev: let s:bookmarks = [time, s:getbookmarks()]
-		"? let s:bookmarks = [time, ctrlp#utils#readfile(s:cachefile())]
+		" prev: let s:bookmarks = [time, s:getbookmarks()]
+		let s:bookmarks = [time, ctrlp#utils#readfile(cachefile)]
 	en
-	" MAYBE: retu copy(s:bookmarks[1])
 endf
 
 fu! s:parts(str, ...)
@@ -119,9 +114,8 @@ fu! s:syntax()
 endf
 " Public {{{1
 fu! ctrlp#bookmarkdir#init()
-	cal s:setentries()
 	cal s:syntax()
-	retu s:process(copy(s:bookmarks[1]), 'u')
+	retu s:process(s:getbookmarks(), 'u')
 endf
 
 fu! ctrlp#bookmarkdir#accept(mode, str)
@@ -170,8 +164,7 @@ fu! ctrlp#bookmarkdir#remove(entries)
 	let dirstoremove = map(copy(a:entries), expr_vval_getentrydir)
 	cal s:writecache(empty(dirstoremove) ? [] :
 		\ filter(s:getbookmarks(), 'index(dirstoremove, ' . expr_vval_getentrydir . ') < 0'))
-	cal s:setentries()
-	retu s:process(copy(s:bookmarks[1]), 'u')
+	retu s:process(s:getbookmarks(), 'u')
 endf
 
 fu! ctrlp#bookmarkdir#id()

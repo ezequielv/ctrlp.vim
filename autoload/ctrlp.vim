@@ -2159,7 +2159,7 @@ fu! s:bufnrfilpath(line)
 		let filpath = s:dyncwd.s:lash().a:line
 	en
 	let filpath = fnamemodify(filpath, ':p')
-	let bufnr = bufnr('^'.fnameescape(filpath).'$')
+	let bufnr = bufnr('\V\^'.escape(filpath, '\').'\$')
 	if (!filereadable(filpath) && bufnr < 1)
 		if (a:line =~ '[\/]\?\[\d\+\*No Name\]$')
 			let bufnr = str2nr(matchstr(a:line, '[\/]\?\[\zs\d\+\ze\*No Name\]$'))

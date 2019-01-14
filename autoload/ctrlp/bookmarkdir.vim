@@ -44,9 +44,14 @@ fu! s:writecache(lines)
 	cal ctrlp#utils#writecache(a:lines, s:cadir, s:cafile)
 endf
 
-fu! s:getbookmarks()
+fu! s:getbookmarks(...)
 	cal s:setentries()
 	let entries = copy(s:bookmarks[1])
+	if a:0 > 0
+		"? " NOTE: s:process() returns the first arg anyway.
+		"? let entries = s:process(entries, a:1)
+		cal s:process(entries, a:1)
+	en
 	retu entries
 endf
 
@@ -105,7 +110,7 @@ endf
 " Public {{{1
 fu! ctrlp#bookmarkdir#init()
 	cal s:syntax()
-	retu s:process(s:getbookmarks(), 'u')
+	retu s:getbookmarks('u')
 endf
 
 fu! ctrlp#bookmarkdir#accept(mode, str)
@@ -154,7 +159,7 @@ fu! ctrlp#bookmarkdir#remove(entries)
 	let dirstoremove = map(copy(a:entries), expr_vval_getentrydir)
 	cal s:writecache(empty(dirstoremove) ? [] :
 		\ filter(s:getbookmarks(), 'index(dirstoremove, ' . expr_vval_getentrydir . ') < 0'))
-	retu s:process(s:getbookmarks(), 'u')
+	retu s:getbookmarks('u')
 endf
 
 fu! ctrlp#bookmarkdir#id()

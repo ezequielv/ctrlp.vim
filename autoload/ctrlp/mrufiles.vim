@@ -28,8 +28,18 @@ fu! s:excl(fn)
 	retu !empty({s:ex}) && a:fn =~# {s:ex}
 endf
 
+" fixed: this function does not expand the home dir, and the remove function
+" does not collapse the home dir -- so the remove function cannot find the
+" elements read from the file.
+"  IDEA: make sure that we "trade" in the format specified by
+"  ctrlp_tilde_homedir (TODO: create function for the translation(s)).
+"  IDEA: the function taking the selection should know that the caller *might*
+"  have fnamemodify()-ed the entries (as it's currently the case).
 fu! s:mergelists()
-	let diskmrufs = ctrlp#utils#readfile(ctrlp#mrufiles#cachefile())
+	" done: transform the entries read from the file using the new function that
+	" will encapsulate the 'fnamemodify()'.
+	" prev: let diskmrufs = map(ctrlp#utils#readfile(ctrlp#mrufiles#cachefile()), 'ctrlp#utils#normalizepathname(v:val)')
+	let diskmrufs = map(ctrlp#utils#readfile(ctrlp#mrufiles#cachefile()), 's:normalizefname(v:val)')
 	cal filter(diskmrufs, 'index(s:mrufs, v:val) < 0')
 	let mrufs = s:mrufs + diskmrufs
 	retu s:chop(mrufs)
@@ -41,7 +51,8 @@ fu! s:chop(mrufs)
 endf
 
 fu! s:reformat(mrufs, ...)
-	let cwd = getcwd()
+	" prev: let cwd = ctrlp#utils#normalizepathname(getcwd())
+	let cwd = s:normalizefname(getcwd())
 	let cwd .= cwd !~ '[\/]$' ? ctrlp#utils#lash() : ''
 	if {s:re}
 		let cwd = exists('+ssl') ? tr(cwd, '/', '\') : cwd
@@ -67,10 +78,23 @@ fu! s:record(bufnr)
 	en
 endf
 
+" prev: fu! s:normalizefname(fname)
+" prev: 	retu fnamemodify(a:fname, get(g:, 'ctrlp_tilde_homedir', 0) ? ':p:~' : ':p')
+" prev: endf
+fu! s:normalizefname(fname)
+	retu ctrlp#utils#modifypathname(a:fname, 'f')
+endf
+
 fu! s:addtomrufs(fname)
-	let fn = fnamemodify(a:fname, get(g:, 'ctrlp_tilde_homedir', 0) ? ':p:~' : ':p')
+	" done: put this in a function, so we can transform arbitrary entries to the
+	" format selected by the user.
+	" prev: let fn = fnamemodify(a:fname, get(g:, 'ctrlp_tilde_homedir', 0) ? ':p:~' : ':p')
+	" prev: let fn = ctrlp#utils#normalizepathname(a:fname)
+	let fn = s:normalizefname(a:fname)
 	let fn = exists('+ssl') ? tr(fn, '/', '\') : fn
-	let abs_fn = fnamemodify(fn,':p')
+	" TODO: MAYBE: replace this call to fnamemodify() for ctrlp#utils#modifypathname()
+	" prev: let abs_fn = fnamemodify(fn,':p')
+	let abs_fn = ctrlp#utils#modifypathname(fn, 'a')
 	if ( !empty({s:in}) && fn !~# {s:in} ) || ( !empty({s:ex}) && fn =~# {s:ex} )
 		\ || !empty(getbufvar('^' . abs_fn . '$', '&bt')) || !filereadable(abs_fn)
 		retu
@@ -107,9 +131,13 @@ fu! ctrlp#mrufiles#remove(files)
 	let mrufs = []
 	if a:files != []
 		let mrufs = s:mergelists()
-		let cond = 'index(a:files, v:val, 0, !{s:cseno}) < 0'
+		" prev: let files = map(copy(a:files), 'ctrlp#utils#normalizepathname(v:val)')
+		let files = map(copy(a:files), 's:normalizefname(v:val)')
+		let cond = 'index(files, v:val, 0, !{s:cseno}) < 0'
+		echomsg printf( 'ctrlp#mrufiles#remove(): before removing: len(mrufs)=%d; len(s:mrufs)=%d; files=%s; cond=%s;', len(mrufs), len(s:mrufs), string(files), string(cond) )
 		cal filter(mrufs, cond)
 		cal filter(s:mrufs, cond)
+		echomsg printf( 'ctrlp#mrufiles#remove():  after removing: len(mrufs)=%d; len(s:mrufs)=%d;', len(mrufs), len(s:mrufs) )
 	en
 	cal s:savetofile(mrufs)
 	retu s:reformat(mrufs)

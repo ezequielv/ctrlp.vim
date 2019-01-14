@@ -337,6 +337,15 @@ fu! s:Open()
 	cal s:log(1)
 	cal s:getenv()
 	cal s:execextvar('enter')
+	" FIXME: address the issue of a killed ControlP buffer (only when this has
+	" been killed (say, when s:buffunc(1) does not return properly)).
+	" MAYBE: call s:setupblank() before calling s:buffunc(1)?
+	" MAYBE: try .. catch somewhere within this function to avoid swapfiles
+	" creating annoying delays (the user has to blindly either press "esc"
+	" several times, or (I guess) choose one of the "recovery" options).
+	" IDEA: use the 'SwapExists' autocmd (pattern == 'ControlP'? (but do check
+	" other things inside the autocmd command, as it's possible that other
+	" buffers with that name might be created at some point)).
 	sil! exe 'keepa' ( s:mw_pos == 'top' ? 'to' : 'bo' ) '1new ControlP'
 	cal s:buffunc(1)
 	let [s:bufnr, s:winw] = [bufnr('%'), winwidth(0)]

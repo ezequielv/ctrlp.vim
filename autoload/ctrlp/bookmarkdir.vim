@@ -48,8 +48,6 @@ fu! s:getbookmarks(...)
 	cal s:setentries()
 	let entries = copy(s:bookmarks[1])
 	if a:0 > 0
-		"? " NOTE: s:process() returns the first arg anyway.
-		"? let entries = s:process(entries, a:1)
 		cal s:process(entries, a:1)
 	en
 	retu entries

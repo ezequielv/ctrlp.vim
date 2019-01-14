@@ -44,17 +44,8 @@ fu! s:writecache(lines)
 	cal ctrlp#utils#writecache(a:lines, s:cadir, s:cafile)
 endf
 
-" done: put the improvements described here in a new branch:
-"  dev_ezequielv-feat-bookmkarkdirs_use_cached_bookmarks_asmuchaspossible-01-01_01
-" done: make this function always return a copy of the cached list, so it
-" needs to call s:setentries() (only caller?).
-" done: remove all other calls to s:setentries() (including the one in
-" init()), and replace (where needed) usage of s:bookmarks[1] for
-" s:getbookmarks().
 fu! s:getbookmarks()
-	" prev: retu ctrlp#utils#readfile(s:cachefile())
 	cal s:setentries()
-	" prev: retu copy(s:bookmarks[1])
 	let entries = copy(s:bookmarks[1])
 	retu entries
 endf
@@ -70,7 +61,6 @@ fu! s:setentries()
 	let cachefile = s:cachefile()
 	let time = getftime(cachefile)
 	if !( exists('s:bookmarks') && time == s:bookmarks[0] )
-		" prev: let s:bookmarks = [time, s:getbookmarks()]
 		let s:bookmarks = [time, ctrlp#utils#readfile(cachefile)]
 	en
 endf

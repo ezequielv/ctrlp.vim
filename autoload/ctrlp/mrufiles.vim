@@ -75,7 +75,7 @@ fu! s:addtomrufs(fname)
 	let fn = s:normalizefname(a:fname)
 	let fn = exists('+ssl') ? tr(fn, '/', '\') : fn
 	let abs_fn = ctrlp#utils#modifypathname(fn, 'a')
-	if ( !empty({s:in}) && fn !~# {s:in} ) || ( !empty({s:ex}) && fn =~# {s:ex} )
+	if ( !empty({s:in}) && abs_fn !~# {s:in} ) || ( !empty({s:ex}) && abs_fn =~# {s:ex} )
 		\ || !empty(getbufvar('^' . abs_fn . '$', '&bt')) || !filereadable(abs_fn)
 		retu
 	en

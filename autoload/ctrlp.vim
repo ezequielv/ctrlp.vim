@@ -1749,8 +1749,11 @@ fu! s:formatline(str)
 			let str .= printf(' %-5s %-30s',
 				\ parts[0],
 				\ parts[2])
-			if (!empty(s:bufpath_mod))
-				let str .= printf('  %s', parts[3])
+			" prev: if (!empty(parts[3]))
+			" orig: 	let str .= printf('  %s', parts[3])
+			" orig: en
+			if (!empty(parts[3]))
+				let str .= printf('  %s', s:getpathamefrombufparts(parts))
 			en
 		en
 	en

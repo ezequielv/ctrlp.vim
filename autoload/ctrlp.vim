@@ -574,9 +574,17 @@ fu! s:bufparts(bufnr)
 	let hiflags .= (a:bufnr == s:crbufnr       ? '!' : '')  " current
 
 	let bname = bufname(a:bufnr)
-	let bname = (bname == '' ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 
-	let bpath = empty(s:bufpath_mod) ? '' : fnamemodify(bufname(a:bufnr), s:bufpath_mod).s:lash()
+	" orig: let bpath = empty(s:bufpath_mod) ? '' : fnamemodify(bufname(a:bufnr), s:bufpath_mod).s:lash()
+	if empty(s:bufpath_mod) || empty(bname)
+		let bpath = ''
+	el
+		let bpath = fnamemodify(bname, s:bufpath_mod)
+		let bpath .= s:lash(bpath)
+	en
+
+	" orig: let bname = (bname == '' ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
+	let bname = (empty(bname) ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 
 	retu [idc, hiflags, bname, bpath]
 endf

@@ -575,7 +575,6 @@ fu! s:bufparts(bufnr)
 
 	let bname = bufname(a:bufnr)
 
-	" orig: let bpath = empty(s:bufpath_mod) ? '' : fnamemodify(bufname(a:bufnr), s:bufpath_mod).s:lash()
 	if empty(s:bufpath_mod) || empty(bname)
 		let bpath = ''
 	el
@@ -583,7 +582,6 @@ fu! s:bufparts(bufnr)
 		let bpath .= s:lash(bpath)
 	en
 
-	" orig: let bname = (bname == '' ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 	let bname = (empty(bname) ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 
 	retu [idc, hiflags, bname, bpath]

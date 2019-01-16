@@ -1812,6 +1812,22 @@ fu! s:ispathitem()
 	retu s:itemtype < len(s:coretypes) || s:getextvar('type') == 'path'
 endf
 
+" prev: " optional parameters:
+" prev: "  keep_empty_dir (default 0)
+" prev: fu! s:getpathamefrombufparts(parts, ...)
+" note: a:parts is the value returned from s:bufparts()
+fu! s:getpathamefrombufparts(parts)
+	let bufdir = a:parts[3]
+	let buffname = a:parts[2]
+	" prev: " prev: retu bufdir . s:lash(bufdir) . buffname
+	" prev: retu ((a:0 && a:1 && empty(bufdir)) ? '' : bufdir . s:lash(bufdir)) . buffname
+	"+? " note: bufdir is either empty or it ends with a s:lash
+	"+? retu bufdir . buffname
+	"+? retu (empty(bufdir) ? '' : bufdir . s:lash(bufdir)) . buffname
+	" note: bufdir is either empty or it ends with a s:lash
+	retu bufdir . buffname
+endf
+
 fu! ctrlp#igncwd(cwd)
 	retu ctrlp#utils#glob(a:cwd, 0) == '' ||
 		\ ( s:igntype >= 0 && s:usrign(a:cwd, getftype(a:cwd)) )
@@ -2560,7 +2576,8 @@ endf
 fu! s:matchbuf(item, pat)
 	let bufnr = s:bufnrfilpath(a:item)[0]
 	let parts = s:bufparts(bufnr)
-	let item = s:byfname ? parts[2] : bufnr.parts[0].parts[2].s:lash().parts[3]
+	" prev: let item = s:byfname ? parts[2] : bufnr.parts[0].parts[3].parts[2]
+	let item = s:byfname ? parts[2] : bufnr.parts[0].s:getpathamefrombufparts(parts)
 	retu match(item, a:pat)
 endf
 

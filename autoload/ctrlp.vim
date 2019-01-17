@@ -1751,8 +1751,8 @@ fu! s:formatline(str)
 			let str .= printf(' %-13s %s%-36s',
 				\ '<bi>'.parts[0].'</bi>',
 				\ '<bn>'.parts[1], '{'.parts[2].'}</bn>')
-			if (!empty(s:bufpath_mod))
-				let str .= printf('  %s', '<bp>'.parts[3].'</bp>')
+			if (!empty(parts[3]))
+				let str .= printf('  %s', '<bp>'.s:getpathamefrombufparts(parts).'</bp>')
 			en
 		el
 			let str .= printf(' %-5s %-30s',

@@ -586,6 +586,15 @@ fu! s:bufparts(bufnr)
 
 	retu [idc, hiflags, bname, bpath]
 endf
+
+" note: a:parts is the value returned from s:bufparts()
+fu! s:getpathamefrombufparts(parts)
+	let bufdir = a:parts[3]
+	let buffname = a:parts[2]
+	" note: bufdir is either empty or it ends with a s:lash
+	retu bufdir . buffname
+endf
+
 fu! ctrlp#buffers(...)
 	let ids = sort(filter(range(1, bufnr('$')), '(empty(getbufvar(v:val, "&bt"))'
 		\ .' || s:isterminal(v:val)) && getbufvar(v:val, "&bl")'), 's:compmreb')
@@ -1810,14 +1819,6 @@ endf
 
 fu! s:ispathitem()
 	retu s:itemtype < len(s:coretypes) || s:getextvar('type') == 'path'
-endf
-
-" note: a:parts is the value returned from s:bufparts()
-fu! s:getpathamefrombufparts(parts)
-	let bufdir = a:parts[3]
-	let buffname = a:parts[2]
-	" note: bufdir is either empty or it ends with a s:lash
-	retu bufdir . buffname
 endf
 
 fu! ctrlp#igncwd(cwd)

@@ -2619,7 +2619,7 @@ fu! s:mmode()
 	let matchmodes = {
 		\ 'match': 'full-line',
 		\ 's:matchfname': 'filename-only',
-		\ 's:matchbuf': 'full-line',
+		\ 's:matchbuf': s:byfname ? 'filename-only' : 'full-line',
 		\ 's:matchtabs': 'first-non-tab',
 		\ 's:matchtabe': 'until-last-tab',
 		\ }

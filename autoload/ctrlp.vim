@@ -605,7 +605,7 @@ fu! ctrlp#buffers(...)
 		for id in ids
 			let bname = bufname(id)
 			let ebname = bname == ''
-			let fname = fnamemodify(ebname ? '['.id.'*No Name]' : bname, ':.')
+			let fname = ebname ? '['.id.'*No Name]' : s:getpathamefrombufparts(s:bufparts(id))
 			cal add(bufs[ebname], fname)
 		endfo
 		retu bufs[0] + bufs[1]

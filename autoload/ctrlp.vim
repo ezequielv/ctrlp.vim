@@ -636,6 +636,7 @@ fu! s:MatchIt(items, pat, limit, exc)
 		if a:limit > 0 && len(lines) >= a:limit | brea | en
 	endfo
 	let s:mdata = [s:dyncwd, s:itemtype, s:regexp, s:sublist(a:items, id, -1)]
+	" DEBUG: cal s:ev_addtolog( 'DEBUG: s:MatchIt(): len(a:items)=%d; len(lines)=%d; a:exc=%s; a:items=%s', len(a:items), len(lines), string(a:exc), string(a:items) )
 	retu lines
 endf
 
@@ -2830,6 +2831,7 @@ fu! ctrlp#init(type, ...)
 	cal s:setlines_pre(s:settype(type))
 	let &filetype = s:DetectFileType(type, &filetype)
 	cal s:setlines_post()
+	" DEBUG: cal s:ev_addtolog( 'DEBUG: init: after s:setlines_post(): len(g:ctrlp_lines)=%d', len(g:ctrlp_lines) )
 	cal ctrlp#syntax()
 	cal s:SetDefTxt()
 	let curName = s:CurTypeName()

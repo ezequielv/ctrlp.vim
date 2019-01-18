@@ -2738,7 +2738,7 @@ fu! ctrlp#getvar(var)
 endf
 " Ezequiel - Logging {{{2
 function! s:ev_addtolog(...)
-	" retu " uncomment to disable logging
+	retu " uncomment to disable logging
 	if ( ! exists( 'g:ev_test_log' ) )
 		let g:ev_test_log = []
 	endif

@@ -2736,6 +2736,14 @@ endf
 fu! ctrlp#getvar(var)
 	retu {a:var}
 endf
+" Ezequiel - Logging {{{2
+function! s:ev_addtolog(...)
+	" retu " uncomment to disable logging
+	if ( ! exists( 'g:ev_test_log' ) )
+		let g:ev_test_log = []
+	endif
+	call add( g:ev_test_log, printf( '[%s] %s', strftime('%Y.%m.%d %H:%M:%S'), call( 'printf', a:000 ) ) )
+endfunction
 "}}}1
 " * Initialization {{{1
 fu! s:setlines_pre(...)

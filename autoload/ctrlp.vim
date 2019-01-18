@@ -579,7 +579,15 @@ fu! s:bufparts(bufnr)
 		let bpath = ''
 	el
 		let bpath = fnamemodify(bname, s:bufpath_mod)
-		let bpath .= s:lash(bpath)
+		" fixed: when the file is relative to the current directory, we don't want
+		" to have bpath == '.' and then add the '/', as that would clash with
+		" other uses of the ':.' filename-modifier (fnamemodify()) scattered
+		" around this file.
+		if bpath ==# '.'
+			let bpath = ''
+		el
+			let bpath .= s:lash(bpath)
+		en
 	en
 
 	let bname = (empty(bname) ? '[No Name]' : fnamemodify(bname, s:bufname_mod))

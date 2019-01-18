@@ -562,6 +562,7 @@ fu! s:lsCmd()
 	en
 endf
 " - Buffers {{{1
+let s:bufparts_bpath_truncate = [ '', '.' ]
 fu! s:bufparts(bufnr)
 	let idc  = (a:bufnr == bufnr('#')      ? '#' : '')  " alternative
 	let idc .= (getbufvar(a:bufnr, '&mod') ? '+' : '')  " modified
@@ -583,7 +584,7 @@ fu! s:bufparts(bufnr)
 		" to have bpath == '.' and then add the '/', as that would clash with
 		" other uses of the ':.' filename-modifier (fnamemodify()) scattered
 		" around this file.
-		if bpath ==# '.'
+		if index(s:bufparts_bpath_truncate, bpath) >= 0
 			let bpath = ''
 		el
 			let bpath .= s:lash(bpath)
@@ -1760,16 +1761,12 @@ fu! s:formatline(str)
 			let str .= printf(' %-13s %s%-36s',
 				\ '<bi>'.parts[0].'</bi>',
 				\ '<bn>'.parts[1], '{'.parts[2].'}</bn>')
-			if (!empty(parts[3]))
-				let str .= printf('  %s', '<bp>'.s:getpathamefrombufparts(parts).'</bp>')
-			en
+			let str .= printf('  %s', '<bp>'.s:getpathamefrombufparts(parts).'</bp>')
 		el
 			let str .= printf(' %-5s %-30s',
 				\ parts[0],
 				\ parts[2])
-			if (!empty(parts[3]))
-				let str .= printf('  %s', s:getpathamefrombufparts(parts))
-			en
+			let str .= printf('  %s', s:getpathamefrombufparts(parts))
 		en
 	en
 	let cond = ct != 'buf' &&s:ispath && ( s:winw - 4 ) < s:strwidth(str)

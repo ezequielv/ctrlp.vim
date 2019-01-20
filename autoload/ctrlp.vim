@@ -1271,6 +1271,13 @@ fu! s:SetWD(args)
 		cal ctrlp#setdir(a:args['dir']) | retu
 	en
 	let pmodes = has_key(a:args, 'mode') ? a:args['mode'] : s:pathmode
+	" MAYBE: refactor this assignment in a function (and make it use something
+	" related to s:curtype()?), as 's:crfilerel' is used in 's:MatchedItems()'
+	" to calculate the file (expression in 'items'/'g:ctrlp_lines') to be
+	" excluded.
+	"  TODO: remove code in 's:MatchedItems()' and have the "special case" for
+	"  'buf' just in the function to be created from the line below.
+	" XREF: search for other lines matching the following one (currently: 1 other)
 	let [s:crfilerel, s:dyncwd] = [fnamemodify(s:crfile, ':.'), getcwd()]
 	if (!type(pmodes))
 		let pmodes =
@@ -1985,6 +1992,7 @@ endf
 fu! ctrlp#setdir(path, ...)
 	let cmd = a:0 ? a:1 : 'lc!'
 	sil! exe cmd s:fnesc(a:path, 'c')
+	" XREF: see comments in 's:SetWD()'
 	let [s:crfilerel, s:dyncwd] = [fnamemodify(s:crfile, ':.'), getcwd()]
 endf
 " Fallbacks {{{3

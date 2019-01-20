@@ -613,13 +613,21 @@ endf
 "   specified (even empty): use these as a source 'bufnr' list
 "   default: retrieve all possible bufnr()s
 fu! ctrlp#buffers(...)
-	let ids = sort(
-		\ filter(
-		\   (a:0 >= 2 ? copy(a:2) : range(1, bufnr('$'))),
-		\   '(empty(getbufvar(v:val, "&bt"))' .
-		\    ' || s:isterminal(v:val)) && getbufvar(v:val, "&bl")'
-		\  ),
-		\ 's:compmreb')
+	" NOTE: only filter buffer ids when not given as a parameter (a:2)
+	let ids = (
+				\  (a:0 >= 2)
+				\  ? filter(map(copy(a:2), 'bufnr(v:val)'), 'v:val > 0')
+				\  : range(1, bufnr('$'))
+				\ )
+	let filter_expr =
+				\ '(empty(getbufvar(v:val, "&bt")) || s:isterminal(v:val)) ' .
+				\   '&& getbufvar(v:val, "&bl")'
+	" NOTE: allow the input 'source_bufnr_list' to include the current buffer.
+	if (!s:matchcrfile) && (a:0 < 2)
+		let curbufnr = s:crbufnr
+		let filter_expr .= ' && (v:val !=# curbufnr)'
+	en
+	cal sort(filter(ids, filter_expr), 's:compmreb')
 	if a:0 && a:1 == 'id'
 		retu ids
 	el
@@ -655,23 +663,7 @@ fu! s:MatchIt(items, pat, limit, exc)
 endf
 
 fu! s:MatchedItems(items, pat, limit)
-	let ct = s:curtype()
-	if ct == 'buf'
-		" TODO: MAYBE: just override the assignment(s) to s:crfilerel, so we don't
-		" have to use "special cases" when dealing with this 's:curtype()'
-		" ('buf').
-		" get the exact same expression (used to create all the 'a:items') that
-		" corresponds to the current buffer.
-		let exc = s:matchcrfile ? '' : get(ctrlp#buffers('items', [s:crbufnr]), 0, '')
-		" prev: cal s:ev_addtolog( 's:MatchedItems(): s:matchcrfile=%d; s:crbufnr=%s; ct=%s; exc=%s;', s:matchcrfile, string(s:crbufnr), string(ct), string(exc) )
-		"? cal s:ev_addtolog( 's:MatchedItems(): hello' )
-		"? cal s:ev_addtolog( 's:MatchedItems(): s:matchcrfile=%d; s:crbufnr=%s; ct=%s; exc=%s; first_lines=%s', s:matchcrfile, string(s:crbufnr), string(ct), string(exc), string(items[:3]) )
-		" DEBUG: cal s:ev_addtolog( 's:MatchedItems(): s:matchcrfile=%d; s:crbufnr=%s; ct=%s; exc=%s; first_lines=%s;', s:matchcrfile, string(s:crbufnr), string(ct), string(exc), string(s:sublist(a:items, 0, 3)) )
-		" TODO: LATER: let exc = '' " NOTE: s:bufnr filtered "at source"
-	el
-		let exc = exists('s:crfilerel') ? s:crfilerel : ''
-	en
-
+	let exc = (exists('s:crfilerel') && s:curtype() != 'buf') ? s:crfilerel : ''
 	let items = s:narrowable() ? s:matched + s:mdata[3] : a:items
 	let matcher = s:getextvar('matcher')
 	if empty(matcher) || type(matcher) != 4 || !has_key(matcher, 'match')

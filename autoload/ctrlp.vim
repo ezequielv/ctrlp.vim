@@ -593,6 +593,7 @@ fu! s:bufparts(bufnr)
 
 	let bname = (empty(bname) ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 
+	" DEBUG: cal s:ev_addtolog( 's:bufparts(): bname=%s; bpath=%s', string(bname), string(bpath) )
 	retu [idc, hiflags, bname, bpath]
 endf
 

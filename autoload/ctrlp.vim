@@ -1613,19 +1613,36 @@ fu! s:comptime(...)
 	retu time1 == time2 ? 0 : time1 < time2 ? 1 : -1
 endf
 
+fu! s:comp_subtracttosortret(subtraction_result)
+	retu
+				\	(a:subtraction_result > 0) ? 1 :
+				\	(a:subtraction_result < 0) ? -1 :
+				\	0
+endf
+
+" NOTE: this function gives a more consistent output (uses the bufnr value
+" itself as a tie breaker).
 fu! s:compmreb(...)
+	let [bufnr1, bufnr2] = [a:1, a:2]
 	" By last entered time (bufnr)
-	let [id1, id2] = [index(s:mrbs, a:1), index(s:mrbs, a:2)]
-	if id1 == id2
-		return 0
-	endif
-	if id1 < 0
-		return 1
-	endif
-	if id2 < 0
-		return -1
-	endif
-	return id1 > id2 ? 1 : -1
+	let [id1, id2] = [index(s:mrbs, bufnr1), index(s:mrbs, bufnr2)]
+	" MAYBE: reorder to prioritise the "successful" case (both id1, id2 >= 0)
+	" MAYBE: IDEA: something "clever" to minimise comparisons:
+	"? (v1): "  (first case: caters for bufnr1 == bufnr2, and also for id1 == id2 == -1)
+	"? (v1): "  (second case: only one of id1, id2 is < 0)
+	"? (v1): retu
+	"? (v1): 			\	(id1 == id2) ? s:comp_subtracttosortret(bufnr1 - bufnr2) :
+	"? (v1): 			\	(min([id1, id2]) < 0) ? s:comp_subtracttosortret(id2 - id1) :
+	"? (v1): 			\	s:comp_subtracttosortret(id1 - id2)
+	"? (v2): retu
+	"? (v2): 			\	(min([id1, id2]) >= 0) ? s:comp_subtracttosortret(id1 - id2) :
+	"? (v2): 			\	(id1 == id2) ? s:comp_subtracttosortret(bufnr1 - bufnr2) :
+	"? (v2): 			\	s:comp_subtracttosortret(id2 - id1)
+	retu
+				\	((id1 < 0) && (id2 < 0)) ? s:comp_subtracttosortret(bufnr1 - bufnr2) :
+				\	(id2 < 0) ? -1 :
+				\	(id1 < 0) ? 1 :
+				\	s:comp_subtracttosortret(id1 - id2)
 endf
 
 fu! s:compmref(...)

@@ -59,11 +59,13 @@ endf
 fu! s:record(bufnr)
 	if s:locked | retu | en
 	let bufnr = a:bufnr + 0
-	let bufname = bufname(bufnr)
-	if bufnr > 0 && !empty(bufname)
+	if bufnr > 0
 		cal filter(s:mrbs, 'v:val != bufnr')
 		cal insert(s:mrbs, bufnr)
-		cal s:addtomrufs(bufname)
+		let bufname = bufname(bufnr)
+		if !empty(bufname)
+			cal s:addtomrufs(bufname)
+		en
 	en
 endf
 

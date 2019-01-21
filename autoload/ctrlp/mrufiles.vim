@@ -83,7 +83,10 @@ fu! s:addtomrufs(fname)
 	en
 	let idx = index(s:mrufs, fn, 0, !{s:cseno})
 	if idx
-		cal filter(s:mrufs, 'v:val !='.( {s:cseno} ? '#' : '?' ).' fn')
+		" NOTE: the filter() call is a no-op when idx < 0, so we avoid it.
+		if idx > 0
+			cal filter(s:mrufs, 'v:val !='.( {s:cseno} ? '#' : '?' ).' fn')
+		en
 		cal insert(s:mrufs, fn)
 		if {s:soup} && idx < 0
 			cal s:savetofile(s:mergelists())

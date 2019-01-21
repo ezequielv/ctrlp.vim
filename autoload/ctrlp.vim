@@ -608,26 +608,17 @@ endf
 " optional arguments:
 "  query_type:
 "   'id': return ids instead of the expanded "items" to be part of g:ctrlp_lines
-"   ('items': items)
-"  source_bufnr_list:
-"   specified (even empty): use these as a source 'bufnr' list
-"   default: retrieve all possible bufnr()s
+"   ('items'[/other values]: items)
 fu! ctrlp#buffers(...)
-	" NOTE: only filter buffer ids when not given as a parameter (a:2)
-	let ids = (
-				\  (a:0 >= 2)
-				\  ? filter(map(copy(a:2), 'bufnr(v:val)'), 'v:val > 0')
-				\  : range(1, bufnr('$'))
-				\ )
 	let filter_expr =
 				\ '(empty(getbufvar(v:val, "&bt")) || s:isterminal(v:val)) ' .
 				\   '&& getbufvar(v:val, "&bl")'
 	" NOTE: allow the input 'source_bufnr_list' to include the current buffer.
-	if (!s:matchcrfile) && (a:0 < 2)
+	if !s:matchcrfile
 		let curbufnr = s:crbufnr
 		let filter_expr .= ' && (v:val !=# curbufnr)'
 	en
-	cal sort(filter(ids, filter_expr), 's:compmreb')
+	let ids = sort(filter(range(1, bufnr('$')), filter_expr), 's:compmreb')
 	if a:0 && a:1 == 'id'
 		retu ids
 	el

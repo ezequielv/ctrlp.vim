@@ -118,10 +118,10 @@ fu! ctrlp#mrufiles#remove(files)
 		let mrufs = s:mergelists()
 		let files = map(copy(a:files), 's:normalizefname(v:val)')
 		let cond = 'index(files, v:val, 0, !{s:cseno}) < 0'
-		echomsg printf( 'ctrlp#mrufiles#remove(): before removing: len(mrufs)=%d; len(s:mrufs)=%d; files=%s; cond=%s;', len(mrufs), len(s:mrufs), string(files), string(cond) )
+		" DEBUG: echomsg printf( 'ctrlp#mrufiles#remove(): before removing: len(mrufs)=%d; len(s:mrufs)=%d; files=%s; cond=%s;', len(mrufs), len(s:mrufs), string(files), string(cond) )
 		cal filter(mrufs, cond)
 		cal filter(s:mrufs, cond)
-		echomsg printf( 'ctrlp#mrufiles#remove():  after removing: len(mrufs)=%d; len(s:mrufs)=%d;', len(mrufs), len(s:mrufs) )
+		" DEBUG: echomsg printf( 'ctrlp#mrufiles#remove():  after removing: len(mrufs)=%d; len(s:mrufs)=%d;', len(mrufs), len(s:mrufs) )
 	en
 	cal s:savetofile(mrufs)
 	retu s:reformat(mrufs)

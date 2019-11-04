@@ -65,6 +65,9 @@ let s:virtual_fname_separators = [
 	\		'::',
 	\ ]
 
+" TODO: deal with dos/windows full paths
+" TODO: extract the "protocol" component ('len(split(a:fname, '://')[0]) > 1'?)
+" TODO: make sure we deal with all the "virtual" names: tar, gz, all netrw (remote?), etc.
 fu! ctrlp#utils#fname_is_virtual(fname) abort
 	" prev: retu (
 	" prev: 			\		empty(a:fname)

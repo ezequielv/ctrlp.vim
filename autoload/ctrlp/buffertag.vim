@@ -33,6 +33,8 @@ let [s:pref, s:opts] = ['g:ctrlp_buftag_', {
 	\ }]
 
 let s:bins = [
+	\ 'ctags-universal',
+	\ 'universal-ctags',
 	\ 'ctags-exuberant',
 	\ 'exuberant-ctags',
 	\ 'exctags',

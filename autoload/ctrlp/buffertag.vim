@@ -116,15 +116,27 @@ fu! ctrlp#buffertag#opts()
 	cal extend(s:types, s:usr_types)
 endf
 " Utilities {{{1
+" TODO: make this function use 'keys(s:types)' as a source to filter the
+" candidate values for the return value.
+"  IDEA: initially, individual components are considered, left-to-right
+"   (so, 'c.doxygen' will try 'c' first, then 'doxygen', which could be parsed
+"   separately of the main type was not supported).
+"   IDEA: have the non-main types supported optionally through a new entry in
+"   's:opts'.
+" IDEA: support the 'filetype' override for the 'tagbar' plugin (there's a
+" buffer-local variable for this, IIRC).
 " for now, only the first component in a multi-component value is considered.
 fu! s:get_ctags_ftype(fname)
 	retu get(split(getbufvar(a:fname, '&filetype'), '\.'), 0, '')
 endf
+"? fu! s:validfname(fname, ...)
+"? endf
 " optional args: [ftype]
 "  ftype:
 "   default: calculated/retrieved from fname/the buffer corresponding to
 "            fname.
 " orig: fu! s:validfile(fname, ftype)
+"   TODO: check other uses of '&modified' (getbufvar(), etc.)
 fu! s:validfile(fname, ...)
 	if empty(a:fname) | retu 0 | en
 	" prev: let ftype = a:0 > 0 ? a:1 : getbufvar(a:fname, '&filetype')
@@ -264,15 +276,27 @@ endf
 
 " NOTE: this file is not guaranteed to exist, and if it does exist it's not
 " guaranteed to have a particular content (empty or otherwise).
+" LATER: make the above behaviour configurable?
 fu! s:tmpfilenamefor(fname, ftype)
 	if !exists('s:tempfilenames')
 		" this name does not have a relevant name/extension, but we'll use it as
 		" the basis for our generated filenames
+		" TODO: this should actually be a directory instead of a file, and we
+		"  should use the original name on every temporary file we create, so we
+		"  allow 'ctags(1)' to match against the full "leaf" name.
 		let s:tempfile_main = tempname()
 		" prev: let s:tempfilenames = [s:tempfile_main]
 		let s:tempfilenames = {s:tempfile_main: ''}
 	en
 	let fname = fnamemodify(bufname(a:fname), ':p')
+	" MAYBE: just use the extension? or would that preclude or impair 'ctags(1)'
+	" to guess the type correctly (for the cases in which the pattern is not
+	" just based on the file extension).
+	" MAYBE: create a directory whose name is based on the "mainfile", and then
+	" remove that in one go (instead of using 'keys(s:tempfilenames)' in
+	" 'ctrlp#buffertag#exit()', for example).  Then, use the original filename,
+	" so that any rules matching on the name as a whole would still work (for
+	" example, 'GNUMakefile', etc.)
 	let tempfname = s:tempfile_main . '-' . fnamemodify(fname, ':t')
 	" NOTE: we don't check whether this file exists or not, as we might be using
 	" two files from different directories named the same way, and also we don't
@@ -313,6 +337,8 @@ fu! s:process(fname, ftype)
 	" be allowed to use the original file (for example, filereadable() on the
 	" file now returned true), and rightly detect that a new ctags run should be
 	" made.
+	"  IDEA: add a string to the value on each conditional expression:
+	"   let change_id_val = s:linesfrombuffer_flag ? 'changedtick:' . getbufvar(a:fname, 'changedtick') : 'ftime:' . getftime(a:fname)
 	" prev: let change_id_val = s:linesfrombuffer_flag ? getbufvar(a:fname, 'changedtick') : getftime(a:fname)
 	let change_id_val = ctags_use_origfile
 		\ ? 'ftime:' . getftime(a:fname)
@@ -328,6 +354,7 @@ fu! s:process(fname, ftype)
 		" instead of the expression that has been moved here).
 		let data = s:exectagsonfile(a:fname, a:ftype, ctags_use_origfile)
 		let [raw, lines] = [split(data, '\n\+'), []]
+		" TODO: do this with: filter( map( filter(raw, '!__TAG__ && split() is ok'), 's:parseline(v:val)'), '!empty(v:val)' ) -- leaves 'raw' with what is to be used as 'lines'
 		for line in raw
 			if line !~# '^!_TAG_' && len(split(line, ';"')) == 2
 				let parsed_line = s:parseline(line)
@@ -339,10 +366,24 @@ fu! s:process(fname, ftype)
 		let cache = { a:fname : { 'change_id': change_id_val, 'lines': lines } }
 		cal extend(g:ctrlp_buftags, cache)
 	en
+	" MAYBE: put a timestamp of sorts on every cache entry about when it was last
+	" used, so we can save memory when this plugin or ctrlp itself is next
+	" entered (removing all the old lines from the cache will help reduce the
+	" long-term memory consumption by this plugin).
 	retu lines
 endf
 
 fu! s:parseline(line)
+	" MAYBE: remove leading and trailing spaces from matches? (this could affect
+	" the matching by 's:chknearby()')
+	"  IDEA: but 's:chknearby()' could add '\s*' as prefix and suffix when
+	"  searching the "escaped" sequence, for example.
+	" IDEA: (better?) have another dict where the bufnr()s with "exact" tags are
+	" flagged:
+	"  let file_uptodate_flag = get( get(s:processed_bufnr, bufnr(_expr_)), 'uptodate', 0 )
+	"  NOTE: we'll probably want to store 'uptodate' in the cache dictionary
+	"   NOTE: be careful with either storing this and having that being either
+	"    meaningless or misleading -- (think about this).
 	let vals = matchlist(a:line,
 		\ '\v^([^\t]+)\t(.+)\t[?/]\^?(.{-1,})\$?[?/]\;\"\t(.+)\tline(no)?\:(\d+)')
 	if vals == [] | retu '' | en
@@ -380,6 +421,27 @@ endf
 fu! s:chknearby(pat)
 	if match(getline('.'), a:pat) < 0
 		let [int, forw, maxl] = [1, 1, line('$')]
+		" FIXME: I think this call is missing the 'stopline' parameter
+		" FIXME: the maximum number of lines to consider in the search should not
+		" be 'maxl', but rather max([line('$')-line('.'),line('.')], which could
+		" save a search "major loop" (2 searches, one with 'forw' and one with
+		" '!forw') when line('.') is (roughly?) line('$')/2.
+		" TODO: implement a "limit" variable ('s:opts') to minimise the number of
+		" searches to be made.  In particular, when using s:linesfrombuffer_flag,
+		" this number could be made quite small, as the tags are supposed to
+		" match, and not having a match could be considered a bad thing, which
+		" could be highlighted by having the cursor on the "wrong" line.
+		" MAYBE: also, when we've used an "exact" tags file (this could be flagged
+		" somewhere), we might not want to even make a call to s:chknearby()
+		" anyway, as there will be no point in having a regex that was a
+		" "guesstimate" not matching for the wrong reasons (for example, a regex
+		" that contains a '\' might match the wrong thing, as the following
+		" charatcter will be interpreted by the regex engine instead of being
+		" taken as a literal)
+		"  NOTE: see comments in 's:parseline()' about 's:processed_bufnr'
+		"  IDEA: use a function like the one I've created to create regexes from
+		"  literals, knowing how "magic" the setting has to be ("verymagic" in my
+		"  function, IIRC).
 		wh !search(a:pat, 'W'.( forw ? '' : 'b' ))
 			if !forw
 				if int > maxl | brea | en
@@ -420,6 +482,8 @@ fu! ctrlp#buffertag#accept(mode, str)
 	if bufnr
 		cal ctrlp#acceptfile(a:mode, bufnr)
 		exe 'norm!' str2nr(get(vals, 2, line('.'))).'G'
+		" NOTE: the string '\V\C' (and the default value ('') appended to it)
+		" matches ('search()') on every non-empty line.
 		cal s:chknearby('\V\C'.get(vals, 3, ''))
 		sil! norm! zvzz
 	en

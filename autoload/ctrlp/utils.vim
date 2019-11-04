@@ -60,6 +60,27 @@ fu! ctrlp#utils#mkdir(dir)
 	retu a:dir
 endf
 
+let s:virtual_fname_separators = [
+	\		':/',
+	\		'::',
+	\ ]
+
+fu! ctrlp#utils#fname_is_virtual(fname) abort
+	" prev: retu (
+	" prev: 			\		empty(a:fname)
+	" prev: 			\		||
+	" prev: 			\		(stridx(a:fname, '://') >= 0)
+	" prev: 			\	)
+	if empty(a:fname) | retu 1 | en
+	for sep in s:virtual_fname_separators
+		let fname_parts = split(a:fname, sep)
+		if (len(fname_parts) > 1) && (len(fname_parts[0]) > 1)
+			retu 1
+		en
+	endfo
+	retu 0
+endf
+
 fu! ctrlp#utils#writecache(lines, ...)
 	if isdirectory(ctrlp#utils#mkdir(a:0 ? a:1 : s:cache_dir))
 		sil! cal writefile(a:lines, a:0 >= 2 ? a:2 : ctrlp#utils#cachefile())

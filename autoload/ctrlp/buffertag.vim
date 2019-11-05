@@ -307,7 +307,7 @@ fu! s:parseline(line)
 
 	let fname = vals[2]
 	if exists('s:tempfilenames')
-		" getting the default input (used as a key here) could be because there is
+		" getting the default value (used as a key here) could be because there is
 		" no mapping from 's:tempfilenames' to an original name:
 		" 1. the mapping from a temporary to a real filename has failed;
 		" 2. even though this dictionary exists, another function has decided not

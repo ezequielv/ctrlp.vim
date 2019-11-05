@@ -397,6 +397,7 @@ fu! ctrlp#buffertag#init(fname)
 		cal extend(lines, s:process(bname, tftype))
 	endfo
 	cal s:syntax()
+	cal s:rmtempfiles()
 	retu lines
 endf
 
@@ -426,7 +427,6 @@ endf
 
 fu! ctrlp#buffertag#exit()
 	unl! s:btmode s:bufname
-	cal s:rmtempfiles()
 endf
 "}}}
 

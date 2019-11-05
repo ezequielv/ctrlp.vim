@@ -252,6 +252,22 @@ fu! s:tmpfilenamefor(fname, ftype)
 	return tempfname
 endf
 
+fu! s:rmtempfiles()
+	let tempfnames = keys(get(s:, 'tempfilenames', {}))
+	" delete the main file (if that was set) last, to help other vim instances
+	" to not create files based on the same "base" name.
+	if !empty(get(s:, 'tempfile_main'))
+		cal filter(tempfnames, 'v:val !=# s:tempfile_main')
+		cal add(tempfnames, s:tempfile_main)
+	en
+	for fname in tempfnames
+		" MAYBE: report error in removing the temporary file(s) ('delete()' return
+		" value).
+		cal delete(fname)
+	endfo
+	unl! s:tempfilenames s:tempfile_main
+endf
+
 fu! s:process(fname, ftype)
 	" NOTE: the only caller to this function now makes sure that a:fname is
 	" always a 's:validfile()', but this call is not strictly guaranteed (at the
@@ -410,19 +426,7 @@ endf
 
 fu! ctrlp#buffertag#exit()
 	unl! s:btmode s:bufname
-	let tempfnames = keys(get(s:, 'tempfilenames', {}))
-	" delete the main file (if that was set) last, to help other vim instances
-	" to not create files based on the same "base" name.
-	if !empty(get(s:, 'tempfile_main'))
-		cal filter(tempfnames, 'v:val !=# s:tempfile_main')
-		cal add(tempfnames, s:tempfile_main)
-	en
-	for fname in tempfnames
-		" MAYBE: report error in removing the temporary file(s) ('delete()' return
-		" value).
-		cal delete(fname)
-	endfo
-	unl! s:tempfilenames s:tempfile_main
+	cal s:rmtempfiles()
 endf
 "}}}
 

@@ -535,22 +535,30 @@ fu! ctrlp#buffertag#accept(mode, str)
 	let bufnr = str2nr(get(vals, 1))
 	if bufnr
 		cal ctrlp#acceptfile(a:mode, bufnr)
-		" FIXME: deal with missing line number -- in that case, do_chknearby
-		" should be true even if cache_entry['match_use_bufcontents'] is set.
-		exe 'norm!' str2nr(get(vals, 2, line('.'))).'G'
 
+		let lineno = str2nr(get(vals, 2, 0))
 		let do_chknearby = 1
 
-		" optionally leave the cursor in the current line: when we know that the
-		" tags correspond to the buffer contents
-		" (cache_entry['match_use_bufcontents'] is set), there is no point in
-		" trying to run the 'ex' command to position the cursor in the right line.
-		let lines_cache_key = s:get_lines_cache_key()
-		if has_key(g:ctrlp_buftags, lines_cache_key)
-			let cache_entry = g:ctrlp_buftags[lines_cache_key]
-			if get(cache_entry, 'match_use_bufcontents')
-				\ && (get(cache_entry, 'changedtick') ==# get(b:, 'changedtick'))
-				let do_chknearby = 0
+		if (lineno > 0)
+			" NOTE: we don't check that 'lineno <= line('$')', as if 'lineno' is too
+			" big the current buffer contents, the '{too_big}G' command will still
+			" position the cursor in the last line, which is the closest we can be
+			" to an unknown position that is likely to be near the bottom of the
+			" file/buffer now.
+			exe 'norm!' lineno.'G'
+
+			" optionally leave the cursor in the current line: when we know that the
+			" tags correspond to the buffer contents
+			" (cache_entry['match_use_bufcontents'] is set), there is no point in
+			" trying to run the 'ex' command in the 'ctags(5)' file to position the
+			" cursor in the line for the selected identifier.
+			let lines_cache_key = s:get_lines_cache_key()
+			if has_key(g:ctrlp_buftags, lines_cache_key)
+				let cache_entry = g:ctrlp_buftags[lines_cache_key]
+				if get(cache_entry, 'match_use_bufcontents')
+							\ && (get(cache_entry, 'changedtick') ==# get(b:, 'changedtick'))
+					let do_chknearby = 0
+				en
 			en
 		en
 

@@ -357,7 +357,6 @@ fu! s:get_lines_cache_key(...) abort
 	" different branch (the code using this function should be taken as well, at
 	" least minimally, to avoid propagating the decision as to what is the
 	" actual key calculation, and keep it in a single place).
-	" prev: retu fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
 	let bname = fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
 	let bufnr = bufnr(bname)
 	" guard against files that (somehow) do not have a buffer associated to

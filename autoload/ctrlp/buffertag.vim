@@ -349,7 +349,21 @@ endf
 "  fname: usually a value retrieved through 'bufname()'.
 "   default: bufname('%')
 fu! s:get_lines_cache_key(...) abort
-	retu fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+	" NOTE: we're using 'bufnr()' now, as those can change for files that have
+	" been ':bwipe'd, for example, and we don't want to be too clever about
+	" caching previous file contents when we're really keeping buffer-related
+	" lines here.
+	" NOTE: it's possible that this is a pre-existing bug, so this might go in a
+	" different branch (the code using this function should be taken as well, at
+	" least minimally, to avoid propagating the decision as to what is the
+	" actual key calculation, and keep it in a single place).
+	" prev: retu fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+	let bname = fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+	let bufnr = bufnr(bname)
+	" guard against files that (somehow) do not have a buffer associated to
+	" them.  For now, we still track them, but we'll keep them separate from the
+	" ones that do have an associated buffer.
+	retu bufnr >= 0 ? 'bufnr:' . bufnr : 'file:' . bname
 endf
 
 fu! s:process(fname, ftype)

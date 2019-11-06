@@ -382,8 +382,6 @@ fu! s:process(fname, ftype)
 		" TODO: do this with: filter( map( filter(raw, '!__TAG__ && split() is ok'), 's:parseline(v:val)'), '!empty(v:val)' ) -- leaves 'raw' with what is to be used as 'lines'
 		for line in raw
 			if line !~# '^!_TAG_' && len(split(line, ';"')) == 2
-				" MAYBE: might also need to pass 'match_use_bufcontents' to
-				" 's:parseline()'.
 				let parsed_line = s:parseline(line, match_use_bufcontents)
 				if parsed_line != ''
 					cal add(lines, parsed_line)
@@ -407,16 +405,6 @@ fu! s:process(fname, ftype)
 endf
 
 fu! s:parseline(line, match_use_bufcontents)
-	" MAYBE: remove leading and trailing spaces from matches? (this could affect
-	" the matching by 's:chknearby()')
-	"  IDEA: but 's:chknearby()' could add '\s*' as prefix and suffix when
-	"  searching the "escaped" sequence, for example.
-	" IDEA: (better?) have another dict where the bufnr()s with "exact" tags are
-	" flagged:
-	"  let file_uptodate_flag = get( get(s:processed_bufnr, bufnr(_expr_)), 'uptodate', 0 )
-	"  NOTE: we'll probably want to store 'uptodate' in the cache dictionary
-	"   NOTE: be careful with either storing this and having that being either
-	"    meaningless or misleading -- (think about this).
 	let vals = matchlist(a:line,
 		\ '\v^([^\t]+)\t(.+)\t[?/]\^?(.{-1,})\$?[?/]\;\"\t(.+)\tline(no)?\:(\d+)')
 	if vals == [] | retu '' | en
@@ -435,17 +423,6 @@ fu! s:parseline(line, match_use_bufcontents)
 
 	let [bufnr, bufname] = [bufnr('^'.fname.'$'), fnamemodify(fname, ':p:t')]
 
-	" prev: let [lineno, pattern] = [vals[6], vals[3]]
-	" prev: if a:match_use_bufcontents
-	" prev: 	"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s+', '', '')
-	" prev: 	"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s*(.{-})\s*$', '\1', '')
-	" prev: 	" put the line, as it appears in the file, just making sure that there are
-	" prev: 	" no tabs in there (we'll use two spaces for that, to show that those
-	" prev: 	" characters are not equivalent to a single space each).
-	" prev: 	let pattern = substitute(
-	" prev: 		\		substitute(getbufline(bufnr, lineno), '\v^\s*(.*\S)\s*$', '\1', '')
-	" prev: 		\ , '\t', '  ', '')
-	" prev: en
 	let lineno = vals[6]
 	let pattern = a:match_use_bufcontents
 		\ ? get(getbufline(bufnr, lineno), 0, '')
@@ -454,8 +431,6 @@ fu! s:parseline(line, match_use_bufcontents)
 	" patterns will match more easily (they'll deal with de-indenting better
 	" than the previous implementation).
 	if a:match_use_bufcontents
-		"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s+', '', '')
-		"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s*(.{-})\s*$', '\1', '')
 		" put the line, as it appears in the file, just making sure that there are
 		" no tabs in there (we'll use two spaces for that, to show that those
 		" characters are not equivalent to a single space each).
@@ -491,14 +466,6 @@ fu! s:chknearby(pat)
 		" this number could be made quite small, as the tags are supposed to
 		" match, and not having a match could be considered a bad thing, which
 		" could be highlighted by having the cursor on the "wrong" line.
-		" MAYBE: also, when we've used an "exact" tags file (this could be flagged
-		" somewhere), we might not want to even make a call to s:chknearby()
-		" anyway, as there will be no point in having a regex that was a
-		" "guesstimate" not matching for the wrong reasons (for example, a regex
-		" that contains a '\' might match the wrong thing, as the following
-		" charatcter will be interpreted by the regex engine instead of being
-		" taken as a literal)
-		"  NOTE: see comments in 's:parseline()' about 's:processed_bufnr'
 		"  IDEA: use a function like the one I've created to create regexes from
 		"  literals, knowing how "magic" the setting has to be ("verymagic" in my
 		"  function, IIRC).
@@ -566,7 +533,6 @@ fu! ctrlp#buffertag#accept(mode, str)
 		" matches ('search()') on every non-empty line.
 		" TODO: let s:chknearby() work out a series of patterns instead of
 		" specifying a prefix and/or suffix to the original pattern here.
-		"? if do_chknearby | cal s:chknearby('\V\C\^\s\*'.get(vals, 3, '').'\s\*\$') | en
 		if do_chknearby | cal s:chknearby('\V\C'.get(vals, 3, '')) | en
 
 		sil! norm! zvzz

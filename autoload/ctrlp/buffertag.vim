@@ -187,9 +187,10 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 				" MAYBE: report error?
 				if rc < 0 | let fname_ctags = '' | en
 			en
-			" MAYBE: move this outside this inner 'if', to make sure that we'll
-			" never use an unreadable file, even if our caller has set
-			" 'a:ctags_use_origfile'.
+			" NOTE: a more "complete" condition has been used in our caller to
+			" determine whether to set 'a:ctags_use_origfile', so the condition here
+			" is only to see whether it makes sense to use the original file as a
+			" fallback.
 			if empty(fname_ctags)
 				if !(
 					\ (!ctrlp#utils#fname_is_virtual(a:fname))
@@ -261,8 +262,8 @@ fu! s:tmpfilenamefor(fname, ftype)
 	if !exists('s:tempfiles_base')
 		" find a temporary file/dir that has not yet been created by other
 		" scripts.
+		" LATER: make sure these checks (/'for' loop) are necessary
 		for i in range(5)
-			" TODO: make sure these checks (/'for' loop) are necessary
 			let fname_now = tempname()
 			if empty(glob(fname_now))
 				" check if the base_file/directory could be created
@@ -312,11 +313,14 @@ fu! s:rmtempfiles()
 	if (!empty(tempfiles_base)) && (!s:tempfiles_base_isdir)
 		cal add(tempfnames, tempfiles_base)
 	en
-	" MAYBE: only remove the files when (!s:tempfiles_base_isdir), as we can
-	" remove the entire tree in the call below.
 	for fname in tempfnames
 		" MAYBE: report error in removing the temporary file(s) ('delete()' return
-		" value).
+		" value) (but check that the file existed before trying to call 'delete()'
+		" to avoid reporting an error that is not necessarily I/O related, as an
+		" entry in a dictionary pointing to a file that's not there in the first
+		" place might not be strictly an I/O error at this point).
+		"  IDEA: for fname in filter(tempfnames, '!empty(glob(v:val))')
+		"   MAYBE: or even ...filter(copy(tempfnames), ...)
 		cal delete(fname)
 	endfo
 	unl tempfnames
@@ -335,7 +339,8 @@ fu! s:process(fname, ftype)
 	" NOTE: the only caller to this function now makes sure that a:fname is
 	" always a 's:validfile()', but this call is not strictly guaranteed (at the
 	" moment) to be equivalent to the one made when filtering the buffers list
-	" at the beginning.
+	" at the beginning.  For example, the calls might end up specifying
+	" different values for the optional 'ftype' parameter.
 	if !s:validfile(a:fname, a:ftype) | retu [] | endif
 
 	let ctags_use_origfile =

@@ -535,6 +535,8 @@ fu! ctrlp#buffertag#accept(mode, str)
 	let bufnr = str2nr(get(vals, 1))
 	if bufnr
 		cal ctrlp#acceptfile(a:mode, bufnr)
+		" FIXME: deal with missing line number -- in that case, do_chknearby
+		" should be true even if cache_entry['match_use_bufcontents'] is set.
 		exe 'norm!' str2nr(get(vals, 2, line('.'))).'G'
 
 		let do_chknearby = 1

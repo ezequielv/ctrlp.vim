@@ -556,6 +556,9 @@ fu! ctrlp#buffertag#accept(mode, str)
 
 		" NOTE: the string '\V\C' (and the default value ('') appended to it)
 		" matches ('search()') on every non-empty line.
+		" TODO: let s:chknearby() work out a series of patterns instead of
+		" specifying a prefix and/or suffix to the original pattern here.
+		"? if do_chknearby | cal s:chknearby('\V\C\^\s\*'.get(vals, 3, '').'\s\*\$') | en
 		if do_chknearby | cal s:chknearby('\V\C'.get(vals, 3, '')) | en
 
 		sil! norm! zvzz

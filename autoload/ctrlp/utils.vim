@@ -84,6 +84,38 @@ fu! ctrlp#utils#fname_is_virtual(fname) abort
 	retu 0
 endf
 
+fu! ctrlp#utils#can_remove_directories() abort
+	if !exists('s:can_remove_directories_result')
+		let res = exists('*mkdir')
+		if res
+			try
+				" try to call the delete() version that supports the {flags} parameter
+				" (in particular, the 'd' arg).
+				" idea: remove a non-existing file/directory, which should fail
+				" gracefully.
+				cal delete(tempname(), 'd')
+				" NOTE: the return value is not important to us (yet): we just wanted
+				" to make sure that the call did not reutrn E118 (or any other
+				" exceptions), and that it would fail gracefully.
+			cat
+				" MAYBE: use fallback:
+				"  example: let res = has('unix') " we could do system(...) instead
+				"  (or any other fallback condition)
+				let res = 0
+			endt
+		en
+		let s:can_remove_directories_result = !!res
+	en
+	retu s:can_remove_directories_result
+endf
+
+" same return value as 'delete()'
+fu! ctrlp#utils#remove_directory(fname) abort
+	if !ctrlp#utils#can_remove_directories() | retu -1 | en
+	" for now, we only use vim's own version
+	retu delete(a:fname, 'd')
+endf
+
 fu! ctrlp#utils#writecache(lines, ...)
 	if isdirectory(ctrlp#utils#mkdir(a:0 ? a:1 : s:cache_dir))
 		sil! cal writefile(a:lines, a:0 >= 2 ? a:2 : ctrlp#utils#cachefile())

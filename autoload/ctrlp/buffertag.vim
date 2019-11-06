@@ -99,6 +99,9 @@ if executable('jsctags')
 	cal extend(s:types, { 'javascript': { 'args': '-f -', 'bin': 'jsctags' } })
 en
 
+" see ':help mkdir()'
+let s:tempfiles_base_isdir = exists('*mkdir') && ctrlp#utils#can_remove_directories()
+
 fu! ctrlp#buffertag#opts()
 	for [ke, va] in items(s:opts)
 		let {va[0]} = exists(s:pref.ke) ? {s:pref.ke} : va[1]
@@ -168,35 +171,64 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 		let bin = expand(s:types[ft]['bin'], 1)
 	en
 	if empty(bin) | retu '' | en
-	if a:ctags_use_origfile
-		let fname_ctags = a:fname
-	el
-		let fname_ctags = s:tmpfilenamefor(a:fname, a:ftype)
-		" forcibly write the lines to that file, and use the original file as a
-		" fallback if that didn't work.
-		" NOTE: the ':sil[ent]' prefix avoids error messages being logged/written,
-		" but we can still react to errors by storing the return value from
-		" 'writefile()'.
-		if !empty(fname_ctags)
-			sil let rc = writefile(getbufline(a:fname, 1, '$'), fname_ctags)
-			" MAYBE: report error?
-			if rc < 0 | let fname_ctags = '' | en
+
+	let fname_ctags = ''
+	try
+		if !a:ctags_use_origfile
+			let fname_ctags = s:tmpfilenamefor(a:fname, a:ftype)
+			let fname_ctags_istmp = !0
+			" forcibly write the lines to that file, and use the original file as a
+			" fallback if that didn't work.
+			" NOTE: the ':sil[ent]' prefix avoids error messages being logged/written,
+			" but we can still react to errors by storing the return value from
+			" 'writefile()'.
+			if !empty(fname_ctags)
+				sil let rc = writefile(getbufline(a:fname, 1, '$'), fname_ctags)
+				" MAYBE: report error?
+				if rc < 0 | let fname_ctags = '' | en
+			en
+			" MAYBE: move this outside this inner 'if', to make sure that we'll
+			" never use an unreadable file, even if our caller has set
+			" 'a:ctags_use_origfile'.
+			if empty(fname_ctags)
+				if !(
+					\ (!ctrlp#utils#fname_is_virtual(a:fname))
+					\ && filereadable(a:fname))
+					retu ''
+				en
+			en
 		en
 		if empty(fname_ctags)
-			if !(
-				\ (!ctrlp#utils#fname_is_virtual(a:fname))
-				\ && filereadable(a:fname))
-				retu ''
-			en
 			let fname_ctags = a:fname
+			let fname_ctags_istmp = 0
 		en
-	en
 
-	let cmd = s:esctagscmd(bin, ags, fname_ctags)
-	if empty(cmd) | retu '' | en
-	let output = s:exectags(cmd)
-	if v:shell_error || output =~ 'Warning: cannot open' | retu '' | en
-	retu output
+		let cmd = s:esctagscmd(bin, ags, fname_ctags)
+		if empty(cmd) | retu '' | en
+		let output = s:exectags(cmd)
+		if v:shell_error || output =~ 'Warning: cannot open' | retu '' | en
+		retu output
+
+	fina
+		" save disc space by truncating the *temporary* file we've just used.
+		" prev: \ && (!empty(glob(fname_ctags)))
+		" NOTE: condition is designed to only match against non-empty temporary
+		" files.
+		if (!empty(fname_ctags)) && fname_ctags_istmp
+					\ && (!empty(readfile(fname_ctags, '', 1)))
+				" create an empty(-ish) file.
+				" NOTE: this will stress the filesystem directory structure less
+				" (hopefully) than removing the file, as there could be several files
+				" with the same "leafname" that will end up being mapped to the same
+				" temporary filename, thus resulting in potentially unnecessary
+				" 'writefile(), delete(), writefile()' operations, and we're thus
+				" replacing those with 'writefile(real1), writefile(empty),
+				" writefile(real2)' here.
+				" NOTE: for now, we ignore errors here, as the only purpose of this
+				" operation is to save disc space.
+				sil let rc = writefile([], fname_ctags, 'b')
+		en
+	endt
 endf
 
 fu! s:esctagscmd(bin, args, ...)
@@ -226,44 +258,77 @@ endf
 " guaranteed to have a particular content (empty or otherwise).
 " LATER: make the above behaviour configurable?
 fu! s:tmpfilenamefor(fname, ftype)
+	if !exists('s:tempfiles_base')
+		" find a temporary file/dir that has not yet been created by other
+		" scripts.
+		for i in range(5)
+			" TODO: make sure these checks (/'for' loop) are necessary
+			let fname_now = tempname()
+			if empty(glob(fname_now))
+				" check if the base_file/directory could be created
+				if s:tempfiles_base_isdir
+					try
+						" NOTE: permissions set to make this only readable by the current
+						" process effective user.
+						" NOTE: throws an exception on failure
+						cal mkdir(fname_now, '', 0700)
+					cat | con | endt
+				el
+					" create an empty(-ish) file
+					sil if writefile([], fname_now, 'b') != 0 | con | en
+				en
+				let s:tempfiles_base = fname_now
+				break
+			en
+		endfo
+		if !exists('s:tempfiles_base')
+			retu ''
+		en
+	en
 	if !exists('s:tempfilenames')
-		" this name does not have a relevant name/extension, but we'll use it as
-		" the basis for our generated filenames
-		" TODO: this should actually be a directory instead of a file, and we
-		"  should use the original name on every temporary file we create, so we
-		"  allow 'ctags(1)' to match against the full "leaf" name.
-		let s:tempfile_main = tempname()
-		let s:tempfilenames = {s:tempfile_main: ''}
+		let s:tempfilenames = {}
 	en
 	let fname = fnamemodify(bufname(a:fname), ':p')
-	" MAYBE: create a directory whose name is based on the "mainfile", and then
-	" remove that in one go (instead of using 'keys(s:tempfilenames)' in
-	" 'ctrlp#buffertag#exit()', for example).  Then, use the original filename,
-	" so that any rules matching on the name as a whole would still work (for
-	" example, 'GNUMakefile', etc.)
-	let tempfname = s:tempfile_main . '-' . fnamemodify(fname, ':t')
+	let tempfname = (
+		\ s:tempfiles_base .
+		\ (s:tempfiles_base_isdir ? '/' : '-' ) .
+		\ fnamemodify(fname, ':t'))
 	" NOTE: we don't check whether this file exists or not, as we might be using
 	" two files from different directories named the same way, and also we don't
 	" want to rule out calling this function twice for the same file at
 	" different points in the plugin execution.
+	" NOTE: we also don't check whether there was an entry in this dictionary
+	" for this key ('tempfname'), as we're only interested in the last file that
+	" eacy temporary filename is mapped to.
 	let s:tempfilenames[tempfname] = fname
-	return tempfname
+	retu tempfname
 endf
 
 fu! s:rmtempfiles()
 	let tempfnames = keys(get(s:, 'tempfilenames', {}))
+	let tempfiles_base = get(s:, 'tempfiles_base')
 	" delete the main file (if that was set) last, to help other vim instances
 	" to not create files based on the same "base" name.
-	if !empty(get(s:, 'tempfile_main'))
-		cal filter(tempfnames, 'v:val !=# s:tempfile_main')
-		cal add(tempfnames, s:tempfile_main)
+	if (!empty(tempfiles_base)) && (!s:tempfiles_base_isdir)
+		cal add(tempfnames, tempfiles_base)
 	en
+	" MAYBE: only remove the files when (!s:tempfiles_base_isdir), as we can
+	" remove the entire tree in the call below.
 	for fname in tempfnames
 		" MAYBE: report error in removing the temporary file(s) ('delete()' return
 		" value).
 		cal delete(fname)
 	endfo
-	unl! s:tempfilenames s:tempfile_main
+	unl tempfnames
+
+	" remove the base directory, if necessary
+	if (!empty(tempfiles_base)) && s:tempfiles_base_isdir
+		\ && isdirectory(tempfiles_base)
+		" MAYBE: report error
+		" NOTE: for now, we ignore the return value (this should not fail)
+		cal ctrlp#utils#remove_directory(tempfiles_base)
+	en
+	unl! s:tempfilenames s:tempfiles_base
 endf
 
 fu! s:process(fname, ftype)

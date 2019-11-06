@@ -183,6 +183,7 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 		if !a:ctags_use_origfile
 			let fname_ctags = s:tmpfilenamefor(a:fname, a:ftype)
 			let fname_ctags_istmp = !0
+			let match_use_bufcontents = !0
 			" forcibly write the lines to that file, and use the original file as a
 			" fallback if that didn't work.
 			" NOTE: the ':sil[ent]' prefix avoids error messages being logged/written,
@@ -208,14 +209,17 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 		if empty(fname_ctags)
 			let fname_ctags = a:fname
 			let fname_ctags_istmp = 0
+			" when using the original file for producing tags, we will consider the
+			" "tag source" as matching the buffer contents when such buffer does not
+			" have the 'modified' flag set.
+			let match_use_bufcontents = !getbufvar(a:fname, '&modified')
 		en
 
 		let cmd = s:esctagscmd(bin, ags, fname_ctags)
 		if empty(cmd) | retu retnocontent | en
 		let output = s:exectags(cmd)
 		if v:shell_error || output =~ 'Warning: cannot open' | retu retnocontent | en
-		" FIXME: calculate the flag value in retvalue[1]
-		retu [output, 0]
+		retu [output, match_use_bufcontents]
 
 	fina
 		" save disc space by truncating the *temporary* file we've just used.
@@ -341,6 +345,13 @@ fu! s:rmtempfiles()
 	unl! s:tempfilenames s:tempfiles_base
 endf
 
+" optional args:
+"  fname: usually a value retrieved through 'bufname()'.
+"   default: bufname('%')
+fu! s:get_lines_cache_key(...) abort
+	retu fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+endf
+
 fu! s:process(fname, ftype)
 	" NOTE: the only caller to this function now makes sure that a:fname is
 	" always a 's:validfile()', but this call is not strictly guaranteed (at the
@@ -354,12 +365,16 @@ fu! s:process(fname, ftype)
 		\ && !ctrlp#utils#fname_is_virtual(a:fname)
 		\ && filereadable(a:fname)
 
+	" NOTE: this could be either a string (if the variable is not available), or
+	" a number.
+	let changedtick = getbufvar(a:fname, 'changedtick')
 	let change_id_val = ctags_use_origfile
 		\ ? 'ftime:' . getftime(a:fname)
-		\ : 'changedtick:' . getbufvar(a:fname, 'changedtick')
-	if has_key(g:ctrlp_buftags, a:fname)
-		\ && g:ctrlp_buftags[a:fname]['change_id'] == change_id_val
-		let lines = g:ctrlp_buftags[a:fname]['lines']
+		\ : 'changedtick:' . changedtick
+	let lines_cache_key = s:get_lines_cache_key(a:fname)
+	if has_key(g:ctrlp_buftags, lines_cache_key)
+		\ && g:ctrlp_buftags[lines_cache_key]['change_id'] == change_id_val
+		let lines = g:ctrlp_buftags[lines_cache_key]['lines']
 	el
 		let [data, match_use_bufcontents] =
 			\ s:exectagsonfile(a:fname, a:ftype, ctags_use_origfile)
@@ -369,17 +384,19 @@ fu! s:process(fname, ftype)
 			if line !~# '^!_TAG_' && len(split(line, ';"')) == 2
 				" MAYBE: might also need to pass 'match_use_bufcontents' to
 				" 's:parseline()'.
-				let parsed_line = s:parseline(line)
+				let parsed_line = s:parseline(line, match_use_bufcontents)
 				if parsed_line != ''
 					cal add(lines, parsed_line)
 				en
 			en
 		endfo
-		" TODO: store 'match_use_bufcontents', and possibly also 'changedtick', to
-		" make sure that we can use both later ('match_use_bufcontents' might only
-		" make sense if the value of 'b:changedtick' is unchanged from the one
-		" we've stored in the cache, too).
-		let cache = { a:fname : { 'change_id': change_id_val, 'lines': lines } }
+		let cache = { lines_cache_key : { 'change_id': change_id_val, 'lines': lines } }
+		if match_use_bufcontents
+			cal extend(cache, {
+				\ 'match_use_bufcontents': match_use_bufcontents,
+				\ 'changedtick': changedtick,
+				\ })
+		en
 		cal extend(g:ctrlp_buftags, cache)
 	en
 	" MAYBE: put a timestamp of sorts on every cache entry about when it was last
@@ -389,7 +406,7 @@ fu! s:process(fname, ftype)
 	retu lines
 endf
 
-fu! s:parseline(line)
+fu! s:parseline(line, match_use_bufcontents)
 	" MAYBE: remove leading and trailing spaces from matches? (this could affect
 	" the matching by 's:chknearby()')
 	"  IDEA: but 's:chknearby()' could add '\s*' as prefix and suffix when
@@ -417,7 +434,37 @@ fu! s:parseline(line)
 	en
 
 	let [bufnr, bufname] = [bufnr('^'.fname.'$'), fnamemodify(fname, ':p:t')]
-	retu vals[1].'	'.vals[4].'|'.bufnr.':'.bufname.'|'.vals[6].'| '.vals[3]
+
+	" prev: let [lineno, pattern] = [vals[6], vals[3]]
+	" prev: if a:match_use_bufcontents
+	" prev: 	"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s+', '', '')
+	" prev: 	"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s*(.{-})\s*$', '\1', '')
+	" prev: 	" put the line, as it appears in the file, just making sure that there are
+	" prev: 	" no tabs in there (we'll use two spaces for that, to show that those
+	" prev: 	" characters are not equivalent to a single space each).
+	" prev: 	let pattern = substitute(
+	" prev: 		\		substitute(getbufline(bufnr, lineno), '\v^\s*(.*\S)\s*$', '\1', '')
+	" prev: 		\ , '\t', '  ', '')
+	" prev: en
+	let lineno = vals[6]
+	let pattern = a:match_use_bufcontents
+		\ ? get(getbufline(bufnr, lineno), 0, '')
+		\ : vals[3]
+	" TODO: make the "remove leading and trailing spaces" unconditional, so
+	" patterns will match more easily (they'll deal with de-indenting better
+	" than the previous implementation).
+	if a:match_use_bufcontents
+		"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s+', '', '')
+		"? let pattern = substitute(getbufline(bufnr, lineno), '\v^\s*(.{-})\s*$', '\1', '')
+		" put the line, as it appears in the file, just making sure that there are
+		" no tabs in there (we'll use two spaces for that, to show that those
+		" characters are not equivalent to a single space each).
+		let pattern = substitute(
+			\		substitute(pattern, '\v^\s*(.{-}\S)\s*$', '\1', '')
+			\ , '\t', '  ', 'g')
+	en
+
+	retu vals[1].'	'.vals[4].'|'.bufnr.':'.bufname.'|'.lineno.'| '.pattern
 endf
 
 fu! s:syntax()
@@ -489,12 +536,26 @@ fu! ctrlp#buffertag#accept(mode, str)
 	if bufnr
 		cal ctrlp#acceptfile(a:mode, bufnr)
 		exe 'norm!' str2nr(get(vals, 2, line('.'))).'G'
-		" TODO: react to a buffername-keyed cache entry for this file for the
-		" 'match_use_bufcontents' value, so that we can optionally avoid the
-		" potentially error-prone search operations.
+
+		let do_chknearby = 1
+
+		" optionally leave the cursor in the current line: when we know that the
+		" tags correspond to the buffer contents
+		" (cache_entry['match_use_bufcontents'] is set), there is no point in
+		" trying to run the 'ex' command to position the cursor in the right line.
+		let lines_cache_key = s:get_lines_cache_key()
+		if has_key(g:ctrlp_buftags, lines_cache_key)
+			let cache_entry = g:ctrlp_buftags[lines_cache_key]
+			if get(cache_entry, 'match_use_bufcontents')
+				\ && (get(cache_entry, 'changedtick') ==# get(b:, 'changedtick'))
+				let do_chknearby = 0
+			en
+		en
+
 		" NOTE: the string '\V\C' (and the default value ('') appended to it)
 		" matches ('search()') on every non-empty line.
-		cal s:chknearby('\V\C'.get(vals, 3, ''))
+		if do_chknearby | cal s:chknearby('\V\C'.get(vals, 3, '')) | en
+
 		sil! norm! zvzz
 	en
 endf

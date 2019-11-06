@@ -367,12 +367,18 @@ fu! s:process(fname, ftype)
 		" TODO: do this with: filter( map( filter(raw, '!__TAG__ && split() is ok'), 's:parseline(v:val)'), '!empty(v:val)' ) -- leaves 'raw' with what is to be used as 'lines'
 		for line in raw
 			if line !~# '^!_TAG_' && len(split(line, ';"')) == 2
+				" MAYBE: might also need to pass 'match_use_bufcontents' to
+				" 's:parseline()'.
 				let parsed_line = s:parseline(line)
 				if parsed_line != ''
 					cal add(lines, parsed_line)
 				en
 			en
 		endfo
+		" TODO: store 'match_use_bufcontents', and possibly also 'changedtick', to
+		" make sure that we can use both later ('match_use_bufcontents' might only
+		" make sense if the value of 'b:changedtick' is unchanged from the one
+		" we've stored in the cache, too).
 		let cache = { a:fname : { 'change_id': change_id_val, 'lines': lines } }
 		cal extend(g:ctrlp_buftags, cache)
 	en
@@ -483,6 +489,9 @@ fu! ctrlp#buffertag#accept(mode, str)
 	if bufnr
 		cal ctrlp#acceptfile(a:mode, bufnr)
 		exe 'norm!' str2nr(get(vals, 2, line('.'))).'G'
+		" TODO: react to a buffername-keyed cache entry for this file for the
+		" 'match_use_bufcontents' value, so that we can optionally avoid the
+		" potentially error-prone search operations.
 		" NOTE: the string '\V\C' (and the default value ('') appended to it)
 		" matches ('search()') on every non-empty line.
 		cal s:chknearby('\V\C'.get(vals, 3, ''))

@@ -162,7 +162,12 @@ fu! s:exectags(cmd)
 	retu output
 endf
 
+" return value: a 2-element list:
+"  [0]: 'ctags(1)' command output (if any);
+"  [1]: whether that output should be considered a "precise" match against the
+"       current buffer contents.
 fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
+	let retnocontent = ['', 0]
 	let [ags, ft] = ['-f - --sort=no --excmd=pattern --fields=nKs --extra= --file-scope=yes ', a:ftype]
 	if type(s:types[ft]) == 1
 		let ags .= s:types[ft]
@@ -171,7 +176,7 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 		let ags = s:types[ft]['args']
 		let bin = expand(s:types[ft]['bin'], 1)
 	en
-	if empty(bin) | retu '' | en
+	if empty(bin) | retu retnocontent | en
 
 	let fname_ctags = ''
 	try
@@ -196,7 +201,7 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 				if !(
 					\ (!ctrlp#utils#fname_is_virtual(a:fname))
 					\ && filereadable(a:fname))
-					retu ''
+					retu retnocontent
 				en
 			en
 		en
@@ -206,10 +211,11 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 		en
 
 		let cmd = s:esctagscmd(bin, ags, fname_ctags)
-		if empty(cmd) | retu '' | en
+		if empty(cmd) | retu retnocontent | en
 		let output = s:exectags(cmd)
-		if v:shell_error || output =~ 'Warning: cannot open' | retu '' | en
-		retu output
+		if v:shell_error || output =~ 'Warning: cannot open' | retu retnocontent | en
+		" FIXME: calculate the flag value in retvalue[1]
+		retu [output, 0]
 
 	fina
 		" save disc space by truncating the *temporary* file we've just used.
@@ -355,7 +361,8 @@ fu! s:process(fname, ftype)
 		\ && g:ctrlp_buftags[a:fname]['change_id'] == change_id_val
 		let lines = g:ctrlp_buftags[a:fname]['lines']
 	el
-		let data = s:exectagsonfile(a:fname, a:ftype, ctags_use_origfile)
+		let [data, match_use_bufcontents] =
+			\ s:exectagsonfile(a:fname, a:ftype, ctags_use_origfile)
 		let [raw, lines] = [split(data, '\n\+'), []]
 		" TODO: do this with: filter( map( filter(raw, '!__TAG__ && split() is ok'), 's:parseline(v:val)'), '!empty(v:val)' ) -- leaves 'raw' with what is to be used as 'lines'
 		for line in raw

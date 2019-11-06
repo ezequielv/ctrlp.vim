@@ -427,9 +427,11 @@ fu! s:parseline(line, match_use_bufcontents)
 	let pattern = a:match_use_bufcontents
 		\ ? get(getbufline(bufnr, lineno), 0, '')
 		\ : vals[3]
-	" TODO: make the "remove leading and trailing spaces" unconditional, so
+	" MAYBE: make the "remove leading and trailing spaces" unconditional, so
 	" patterns will match more easily (they'll deal with de-indenting better
 	" than the previous implementation).
+	"  (note: there are other places in this file where this idea is explored
+	"  further)
 	if a:match_use_bufcontents
 		" put the line, as it appears in the file, just making sure that there are
 		" no tabs in there (we'll use two spaces for that, to show that those
@@ -457,7 +459,7 @@ fu! s:chknearby(pat)
 	if match(getline('.'), a:pat) < 0
 		let [int, forw, maxl] = [1, 1, line('$')]
 		" FIXME: I think this call is missing the 'stopline' parameter
-		" FIXME: the maximum number of lines to consider in the search should not
+		" MAYBE: the maximum number of lines to consider in the search should not
 		" be 'maxl', but rather max([line('$')-line('.'),line('.')], which could
 		" save a search "major loop" (2 searches, one with 'forw' and one with
 		" '!forw') when line('.') is (roughly?) line('$')/2.

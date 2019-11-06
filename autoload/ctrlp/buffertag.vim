@@ -214,7 +214,6 @@ fu! s:exectagsonfile(fname, ftype, ctags_use_origfile)
 
 	fina
 		" save disc space by truncating the *temporary* file we've just used.
-		" prev: \ && (!empty(glob(fname_ctags)))
 		" NOTE: condition is designed to only match against non-empty temporary
 		" files.
 		if (!empty(fname_ctags)) && fname_ctags_istmp

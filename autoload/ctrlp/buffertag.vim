@@ -132,6 +132,7 @@ endf
 fu! s:get_ctags_ftype(fname)
 	retu get(split(getbufvar(a:fname, '&filetype'), '\.'), 0, '')
 endf
+
 " optional args: [ftype]
 "  ftype:
 "   default: calculated/retrieved from fname/the buffer corresponding to

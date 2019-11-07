@@ -401,14 +401,17 @@ fu! s:process(fname, ftype)
 				en
 			en
 		endfo
-		let cache = { lines_cache_key : { 'change_id': change_id_val, 'lines': lines } }
+		let cache_entry = {
+			\ 'change_id': change_id_val,
+			\ 'lines': lines,
+			\ }
 		if match_use_bufcontents
-			cal extend(cache, {
+			cal extend(cache_entry, {
 				\ 'match_use_bufcontents': match_use_bufcontents,
 				\ 'changedtick': changedtick,
 				\ })
 		en
-		cal extend(g:ctrlp_buftags, cache)
+		cal extend(g:ctrlp_buftags, {lines_cache_key : cache_entry})
 	en
 	" MAYBE: put a timestamp of sorts on every cache entry about when it was last
 	" used, so we can save memory when this plugin or ctrlp itself is next

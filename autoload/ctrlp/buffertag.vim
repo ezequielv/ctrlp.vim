@@ -465,6 +465,8 @@ fu! s:process(fname, ftype)
 				en
 			en
 		endfo
+		" TODO: add an autocmd to get rid of the cache entry for the buffer being
+		" ':bwipeout'-ed.
 		let cache_entry = {
 			\ 'change_id': change_id_val,
 			\ 'entered_count': s:entered_count,

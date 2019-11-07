@@ -13,6 +13,8 @@ if exists('g:loaded_ctrlp_buftag') && g:loaded_ctrlp_buftag
 en
 let g:loaded_ctrlp_buftag = 1
 
+let s:entered_count = 0
+
 cal add(g:ctrlp_ext_vars, {
 	\ 'init': 'ctrlp#buffertag#init(s:crfile)',
 	\ 'accept': 'ctrlp#buffertag#accept',
@@ -30,6 +32,7 @@ let [s:pref, s:opts] = ['g:ctrlp_buftag_', {
 	\ 'ctags_bin': ['s:bin', ''],
 	\ 'types': ['s:usr_types', {}],
 	\ 'linesfrombuffer': ['s:linesfrombuffer_flag', 1],
+	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 10],
 	\ }]
 
 let s:bins = [
@@ -365,6 +368,60 @@ fu! s:get_lines_cache_key(...) abort
 	retu bufnr >= 0 ? 'bufnr:' . bufnr : 'file:' . bname
 endf
 
+fu! s:update_mru_cache(bufs)
+	let cache_keys_now = map(copy(a:bufs), 's:get_lines_cache_key(v:val)')
+	if !exists('s:mru_cache_keys_dict')
+		let s:mru_cache_keys_dict = {}
+	en
+	" store keys associated to the buffers to be processed as candidates for
+	" this plugin use/invocation.
+	let s:mru_cache_keys_dict[s:entered_count] = cache_keys_now
+
+	" NOTE: use 0 to disable this auto-pruning/purging
+	if s:cache_mru_maxage > 0
+		" prev: let entered_count_todel_max = max([0, s:entered_count - s:cache_mru_maxage])
+		let entered_count_todel_max = s:entered_count - s:cache_mru_maxage
+		" remove "old" entries
+		if entered_count_todel_max > 0
+			let cache_count_todel_keys = filter(
+				\ keys(s:mru_cache_keys_dict), 'v:val <= entered_count_todel_max')
+			if !empty(cache_count_todel_keys)
+				let cache_keys_seen = {}
+				let default_buftags_cache_entry = {}
+				for cache_keys_todel in
+						\		map(
+						\			copy(cache_count_todel_keys),
+						\			's:mru_cache_keys_dict[v:val]')
+					" prev: let cache_keys_todel =
+					" prev: 	\ filter(
+					" prev: 	\   cache_keys_todel,
+					" prev: 	\		'!has_key(cache_keys_seen, v:val)')
+					" prev: for cache_key_todel in cache_keys_todel
+					for cache_key_todel in
+						\ filter(cache_keys_todel, '!has_key(cache_keys_seen, v:val)')
+						let cache_keys_seen[cache_key_todel] = 1
+						" as the keys to be searched for are just candidates (an entry
+						" might have been used in a later 'ctrlp' invocation), we need to
+						" check the 'entered_count' "timestamp-ish" value to avoid
+						" removing entries that have been used more recently than the
+						" "count threshold" to delete it.
+						if has_key(g:ctrlp_buftags, cache_key_todel) &&
+								\ (get(g:ctrlp_buftags[cache_key_todel], 'entered_count')
+								\		<= entered_count_todel_max)
+							" remove the "tag lines" cache entry
+							unl g:ctrlp_buftags[cache_key_todel]
+						en
+					endfo
+				endfo
+				" remove selected entries from 's:mru_cache_keys_dict'
+				for cache_count_todel_key in cache_count_todel_keys
+					unl s:mru_cache_keys_dict[cache_count_todel_key]
+				endfo
+			en
+		en
+	en
+endf
+
 fu! s:process(fname, ftype)
 	" NOTE: the only caller to this function now makes sure that a:fname is
 	" always a 's:validfile()', but this call is not strictly guaranteed (at the
@@ -384,10 +441,13 @@ fu! s:process(fname, ftype)
 	let change_id_val = ctags_use_origfile
 		\ ? 'ftime:' . getftime(a:fname)
 		\ : 'changedtick:' . changedtick
+
 	let lines_cache_key = s:get_lines_cache_key(a:fname)
 	if has_key(g:ctrlp_buftags, lines_cache_key)
 		\ && g:ctrlp_buftags[lines_cache_key]['change_id'] == change_id_val
-		let lines = g:ctrlp_buftags[lines_cache_key]['lines']
+		let cache_entry = g:ctrlp_buftags[lines_cache_key]
+		let lines = cache_entry['lines']
+		let cache_entry['entered_count'] = s:entered_count
 	el
 		let [data, match_use_bufcontents] =
 			\ s:exectagsonfile(a:fname, a:ftype, ctags_use_origfile)
@@ -403,6 +463,7 @@ fu! s:process(fname, ftype)
 		endfo
 		let cache_entry = {
 			\ 'change_id': change_id_val,
+			\ 'entered_count': s:entered_count,
 			\ 'lines': lines,
 			\ }
 		if match_use_bufcontents
@@ -413,10 +474,6 @@ fu! s:process(fname, ftype)
 		en
 		let g:ctrlp_buftags[lines_cache_key] = cache_entry
 	en
-	" MAYBE: put a timestamp of sorts on every cache entry about when it was last
-	" used, so we can save memory when this plugin or ctrlp itself is next
-	" entered (removing all the old lines from the cache will help reduce the
-	" long-term memory consumption by this plugin).
 	retu lines
 endf
 
@@ -498,11 +555,13 @@ fu! s:chknearby(pat)
 endf
 " Public {{{1
 fu! ctrlp#buffertag#init(fname)
+	let s:entered_count += 1
 	let bufs = filter(
 		\ (exists('s:btmode') && s:btmode)
 		\ ? ctrlp#buffers()
 		\ : [exists('s:bufname') ? s:bufname : a:fname]
 		\ , 's:validfile(v:val)')
+
 	let lines = []
 	for each in bufs
 		let bname = fnamemodify(each, ':p')
@@ -511,6 +570,7 @@ fu! ctrlp#buffertag#init(fname)
 	endfo
 	cal s:syntax()
 	cal s:rmtempfiles()
+	cal s:update_mru_cache(bufs)
 	retu lines
 endf
 

@@ -27,12 +27,13 @@ cal add(g:ctrlp_ext_vars, {
 
 let s:id = g:ctrlp_builtins + len(g:ctrlp_ext_vars)
 
+" TODO: set default for s:cache_mru_maxage to 10
 let [s:pref, s:opts] = ['g:ctrlp_buftag_', {
 	\ 'systemenc': ['s:enc', &enc],
 	\ 'ctags_bin': ['s:bin', ''],
 	\ 'types': ['s:usr_types', {}],
 	\ 'linesfrombuffer': ['s:linesfrombuffer_flag', 1],
-	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 10],
+	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 2],
 	\ }]
 
 let s:bins = [
@@ -372,6 +373,9 @@ fu! s:update_mru_cache(bufs)
 	let cache_keys_now = map(copy(a:bufs), 's:get_lines_cache_key(v:val)')
 	if !exists('s:mru_cache_keys_dict')
 		let s:mru_cache_keys_dict = {}
+		" FIXME: remove the following line (debugging only)
+		"  NOTE: expose the same object through a global variable
+		let g:ctrlp_buftag_mru_cachekeys_dict = s:mru_cache_keys_dict
 	en
 	" store keys associated to the buffers to be processed as candidates for
 	" this plugin use/invocation.

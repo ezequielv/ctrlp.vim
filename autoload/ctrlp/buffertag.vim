@@ -434,8 +434,9 @@ fu! s:process(fname, ftype)
 	" different values for the optional 'ftype' parameter.
 	if !s:validfile(a:fname, a:ftype) | retu [] | endif
 
+	let file_modified_flag = getbufvar(a:fname, '&modified')
 	let ctags_use_origfile =
-		\ (!s:linesfrombuffer_flag || !getbufvar(a:fname, '&modified'))
+		\ (!s:linesfrombuffer_flag || !file_modified_flag)
 		\ && !ctrlp#utils#fname_is_virtual(a:fname)
 		\ && filereadable(a:fname)
 
@@ -447,9 +448,33 @@ fu! s:process(fname, ftype)
 		\ : 'changedtick:' . changedtick
 
 	let lines_cache_key = s:get_lines_cache_key(a:fname)
-	if has_key(g:ctrlp_buftags, lines_cache_key)
-		\ && g:ctrlp_buftags[lines_cache_key]['change_id'] == change_id_val
+	let use_cache_entry = has_key(g:ctrlp_buftags, lines_cache_key)
+	if use_cache_entry
 		let cache_entry = g:ctrlp_buftags[lines_cache_key]
+		let use_cache_entry = (cache_entry['change_id'] == change_id_val)
+	en
+
+	" when using the results calculated against the original file, only use the
+	" existing cache entry if it matches our perception of whether to use the
+	" "precise" matching (line numbers, with patterns being merely decorative)
+	" or not (patterns, use 's:chknearby()').
+	if use_cache_entry && ctags_use_origfile
+		let entry_match_use_bufcontents = !!get(cache_entry, 'match_use_bufcontents')
+		let use_cache_entry = (
+			\	((!file_modified_flag) == entry_match_use_bufcontents)
+			\ &&
+			\ ((!entry_match_use_bufcontents)
+			\  || (get(g:ctrlp_buftags[lines_cache_key], 'changedtick') ==# changedtick))
+			\ )
+	en
+
+	"-? if has_key(g:ctrlp_buftags, lines_cache_key)
+	"-? 	\ && g:ctrlp_buftags[lines_cache_key]['change_id'] == change_id_val
+	"-? 	\ && ((!ctags_use_origfile)
+	"-? 	\     || (!get(g:ctrlp_buftags[lines_cache_key], 'match_use_bufcontents'))
+	"-? 	\     || (get(g:ctrlp_buftags[lines_cache_key], 'changedtick') ==# changedtick))
+	if use_cache_entry
+		" prev: let cache_entry = g:ctrlp_buftags[lines_cache_key]
 		let lines = cache_entry['lines']
 		let cache_entry['entered_count'] = s:entered_count
 	el

@@ -13,6 +13,7 @@ if exists('g:loaded_ctrlp_buftag') && g:loaded_ctrlp_buftag
 en
 let g:loaded_ctrlp_buftag = 1
 
+let s:initonce_done = 0
 let s:entered_count = 0
 
 cal add(g:ctrlp_ext_vars, {
@@ -497,8 +498,6 @@ fu! s:process(fname, ftype)
 				en
 			en
 		endfo
-		" TODO: add an autocmd to get rid of the cache entry for the buffer being
-		" ':bwipeout'-ed.
 		let cache_entry = {
 			\ 'change_id': change_id_val,
 			\ 'entered_count': s:entered_count,
@@ -591,8 +590,47 @@ fu! s:chknearby(pat)
 		endw
 	en
 endf
+
+fu! s:initonce() abort
+	if s:initonce_done | retu | en
+
+	if has('autocmd')
+		aug CtrlPAugBufferTag
+			au!
+			au BufDelete,BufUnload * nested cal s:autocmd_on_bufremove()
+		aug END
+	en
+
+	let s:initonce_done = 1
+endf
+
+" autocmd support {{{2
+if has('autocmd')
+
+fu! s:autocmd_on_bufremove()
+	" NOTE: interesting expand()-friendly tokens: <afile>, <abuf>
+	" * BufDelete: <afile>
+	" * BufUnload: <afile>
+	" NOTE: as 's:get_lines_cache_key()' might return mangled values for bufnr(expr) or
+	" bufname(expr), and we don't want to rely on the specific priority order in
+	" which those are given (if there is more than one possibility), then we'll
+	" just try to remove the entry more than once, thus allowing
+	" 's:get_lines_cache_key()' to return a different value on every subsequent
+	" call (the second is the last, currently), therefore yielding a potentially
+	" different cache key.
+	for i in range(2)
+		let cache_key_todel = s:get_lines_cache_key(expand('<afile>'))
+		if has_key(g:ctrlp_buftags, cache_key_todel)
+			" remove the "tag lines" cache entry
+			unl g:ctrlp_buftags[cache_key_todel]
+		en
+	endfo
+endf
+
+en
 " Public {{{1
 fu! ctrlp#buffertag#init(fname)
+	if !s:initonce_done | cal s:initonce() | en
 	let bufs = filter(
 		\ (exists('s:btmode') && s:btmode)
 		\ ? ctrlp#buffers()

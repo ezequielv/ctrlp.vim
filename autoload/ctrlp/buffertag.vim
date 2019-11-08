@@ -470,13 +470,7 @@ fu! s:process(fname, ftype)
 			\ )
 	en
 
-	"-? if has_key(g:ctrlp_buftags, lines_cache_key)
-	"-? 	\ && g:ctrlp_buftags[lines_cache_key]['change_id'] == change_id_val
-	"-? 	\ && ((!ctags_use_origfile)
-	"-? 	\     || (!get(g:ctrlp_buftags[lines_cache_key], 'match_use_bufcontents'))
-	"-? 	\     || (get(g:ctrlp_buftags[lines_cache_key], 'changedtick') ==# changedtick))
 	if use_cache_entry
-		" prev: let cache_entry = g:ctrlp_buftags[lines_cache_key]
 		let lines = cache_entry['lines']
 		let cache_entry['entered_count'] = s:entered_count
 	el

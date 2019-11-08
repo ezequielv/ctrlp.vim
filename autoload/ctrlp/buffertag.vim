@@ -454,6 +454,12 @@ fu! s:process(fname, ftype)
 		let use_cache_entry = (cache_entry['change_id'] == change_id_val)
 	en
 
+	" MAYBE: use a third variant for the 'change_id' element:
+	"  IDEA: 'ftime=nnnn::changedtick=mmmmm' (which has an implied
+	"   entry['match_use_bufcontents'] == 1)
+	"   NOTE: I'm not sure that works, as the logic to know for sure whether to
+	"    set 'match_use_bufcontents' (from s:exectagsonfile()) is different to
+	"    the one where we think we might need it (here)
 	" when using the results calculated against the original file, only use the
 	" existing cache entry if it matches our perception of whether to use the
 	" "precise" matching (line numbers, with patterns being merely decorative)

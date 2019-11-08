@@ -625,17 +625,6 @@ fu! ctrlp#buffertag#init(fname)
 		\ : [exists('s:bufname') ? s:bufname : a:fname]
 		\ , 's:validfile(v:val)')
 
-	" prev: " TODO: (optionally) only consider this run to count if it's different to
-	" prev: "  the last one ('s:cache_mru_dupcounts', see marker o)
-	" prev: "  IDEA: let run_id = join(sort(copy(bufs)), '::sep::')
-	" prev: "   MAYBE: don't use the 'bufs' list itself, but rather either the
-	" prev: "    ctrlp#buffers('id') value, or the cache keys (see below), or...?
-	" prev: "   ref: (s:update_mru_cache()) let cache_keys_now = map(copy(a:bufs), 's:get_lines_cache_key(v:val)')
-	" prev: "   IDEA: maybe pass those keys instead of the 'bufs' list? or is that too
-	" prev: "   prescriptive/"white box-ey"?
-	" prev: "  IDEA: if run_id !=# s:run_id_last | let s:run_id_last = run_id | let s:entered_count += 1 | en
-	" prev: "
-	" prev: "?  \			map(copy(bufs), 'bufnr(v:val) > 0 ? ''bufnr:'' . bufnr(v:val) : v:val')
 	" MAYBE: move this functionality to a new funtion 's:update_invocation_data(bufs)'
 	" work out whether to account for this invocation as a distinct one.
 	let local_run_id =

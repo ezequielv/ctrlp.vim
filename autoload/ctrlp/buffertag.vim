@@ -385,7 +385,6 @@ fu! s:update_mru_cache(bufs)
 
 	" NOTE: use 0 to disable this auto-pruning/purging
 	if s:cache_mru_maxage > 0
-		" prev: let entered_count_todel_max = max([0, s:entered_count - s:cache_mru_maxage])
 		let entered_count_todel_max = s:entered_count - s:cache_mru_maxage
 		" remove "old" entries
 		if entered_count_todel_max > 0
@@ -398,11 +397,6 @@ fu! s:update_mru_cache(bufs)
 						\		map(
 						\			copy(cache_count_todel_keys),
 						\			's:mru_cache_keys_dict[v:val]')
-					" prev: let cache_keys_todel =
-					" prev: 	\ filter(
-					" prev: 	\   cache_keys_todel,
-					" prev: 	\		'!has_key(cache_keys_seen, v:val)')
-					" prev: for cache_key_todel in cache_keys_todel
 					for cache_key_todel in
 						\ filter(cache_keys_todel, '!has_key(cache_keys_seen, v:val)')
 						let cache_keys_seen[cache_key_todel] = 1

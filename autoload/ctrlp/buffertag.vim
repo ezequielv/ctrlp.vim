@@ -28,13 +28,12 @@ cal add(g:ctrlp_ext_vars, {
 
 let s:id = g:ctrlp_builtins + len(g:ctrlp_ext_vars)
 
-" TODO: set default for s:cache_mru_maxage to 10
 let [s:pref, s:opts] = ['g:ctrlp_buftag_', {
 	\ 'systemenc': ['s:enc', &enc],
 	\ 'ctags_bin': ['s:bin', ''],
 	\ 'types': ['s:usr_types', {}],
 	\ 'linesfrombuffer': ['s:linesfrombuffer_flag', 1],
-	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 2],
+	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 10],
 	\ 'cache_mru_dupcounts': ['s:cache_mru_dupcounts', 0],
 	\ }]
 

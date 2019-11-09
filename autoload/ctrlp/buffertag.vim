@@ -135,11 +135,9 @@ endf
 " for now, only the first supported component in a multi-component value is
 " considered.
 fu! s:get_ctags_ftype(fname)
-	" TODO: remove filetypes_all, just use filetypes_sup
-	let filetypes_all = split(getbufvar(a:fname, '&filetype'), '\.')
-	if empty(filetypes_all) | retu '' | en
-	let filetypes_sup = filter(copy(filetypes_all), 'has_key(s:types, v:val)')
-	retu get(filetypes_sup, 0, '')
+	let filetypes_sup = split(getbufvar(a:fname, '&filetype'), '\.')
+	if empty(filetypes_sup) | retu '' | en
+	retu get(filter(filetypes_sup, 'has_key(s:types, v:val)'), 0, '')
 endf
 
 " optional args: [ftype]

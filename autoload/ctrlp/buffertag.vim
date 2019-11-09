@@ -448,7 +448,8 @@ fu! s:process(fname, ftype)
 	let use_cache_entry = has_key(g:ctrlp_buftags, lines_cache_key)
 	if use_cache_entry
 		let cache_entry = g:ctrlp_buftags[lines_cache_key]
-		let use_cache_entry = (cache_entry['change_id'] == change_id_val)
+		let use_cache_entry = (cache_entry['change_id'] ==# change_id_val)
+			\ && (a:ftype ==# cache_entry['ftype'])
 	en
 
 	" MAYBE: use a third variant for the 'change_id' element:
@@ -489,6 +490,7 @@ fu! s:process(fname, ftype)
 		endfo
 		let cache_entry = {
 			\ 'change_id': change_id_val,
+			\ 'ftype': a:ftype,
 			\ 'entered_count': s:entered_count,
 			\ 'lines': lines,
 			\ }

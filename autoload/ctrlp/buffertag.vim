@@ -125,8 +125,6 @@ fu! ctrlp#buffertag#opts()
 	cal extend(s:types, s:usr_types)
 endf
 " Utilities {{{1
-" TODO: make this function use 'keys(s:types)' as a source to filter the
-" candidate values for the return value.
 "  IDEA: initially, individual components are considered, left-to-right
 "   (so, 'c.doxygen' will try 'c' first, then 'doxygen', which could be parsed
 "   separately of the main type was not supported).
@@ -134,9 +132,14 @@ endf
 "   's:opts'.
 " IDEA: support the 'filetype' override for the 'tagbar' plugin (there's a
 " buffer-local variable for this, IIRC).
-" for now, only the first component in a multi-component value is considered.
+" for now, only the first supported component in a multi-component value is
+" considered.
 fu! s:get_ctags_ftype(fname)
-	retu get(split(getbufvar(a:fname, '&filetype'), '\.'), 0, '')
+	" TODO: remove filetypes_all, just use filetypes_sup
+	let filetypes_all = split(getbufvar(a:fname, '&filetype'), '\.')
+	if empty(filetypes_all) | retu '' | en
+	let filetypes_sup = filter(copy(filetypes_all), 'has_key(s:types, v:val)')
+	retu get(filetypes_sup, 0, '')
 endf
 
 " optional args: [ftype]
@@ -146,6 +149,8 @@ endf
 fu! s:validfile(fname, ...)
 	if empty(a:fname) | retu 0 | en
 	let ftype = a:0 > 0 ? a:1 : s:get_ctags_ftype(a:fname)
+	" TODO: remove the check against 's:types', as it's done in
+	" 'get_ctags_ftype()' now.
 	if empty(ftype) || index(keys(s:types), ftype) < 0 | retu 0 | en
 	" allow files to be tagged from buffers when they're not readable.
 	retu 1

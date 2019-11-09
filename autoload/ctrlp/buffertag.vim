@@ -143,12 +143,10 @@ endf
 " optional args: [ftype]
 "  ftype:
 "   default: calculated/retrieved from fname/the buffer corresponding to
-"            fname.
+"            fname ('s:get_ctags_ftype()').
 fu! s:validfile(fname, ...)
 	if empty(a:fname) | retu 0 | en
 	let ftype = a:0 > 0 ? a:1 : s:get_ctags_ftype(a:fname)
-	" TODO: remove the check against 's:types', as it's done in
-	" 'get_ctags_ftype()' now.
 	if empty(ftype) || index(keys(s:types), ftype) < 0 | retu 0 | en
 	" allow files to be tagged from buffers when they're not readable.
 	retu 1

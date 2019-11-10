@@ -131,6 +131,16 @@ endf
 "   's:opts'.
 " IDEA: support the 'filetype' override for the 'tagbar' plugin (there's a
 " buffer-local variable for this, IIRC).
+" MAYBE: add support for the extensions used in 'tagbar' (see ':h tagbar-extend')
+"  NOTE: interesting variables: 'g:tagbar_type_{vim_filetype}', 'b:tagbar_type'.
+"  NOTE: this might be complicated, as we'll have to replicate the processing
+"   of those definition dictionaries as 'tagbar' does it, with forward and
+"   backward compatibility.
+"   IDEA: an idea would be to use a single-run entry for the 'ftype' used
+"    in the processing of each file, and allocate a temporary (but reusable,
+"    if the 'g:tagbar_type_{vim_filetype}' was used, for example) entry in
+"    's:opts', and also do the same 'kinds' dictionary entry parsing and
+"    associated per-'tags(5)'-entry processing that 'tagbar' does.
 " for now, only the first supported component in a multi-component value is
 " considered.
 fu! s:get_ctags_ftype(fname)

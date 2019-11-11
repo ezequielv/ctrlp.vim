@@ -20,6 +20,28 @@ cal add(g:ctrlp_ext_vars, {
 	\ })
 
 let s:id = g:ctrlp_builtins + len(g:ctrlp_ext_vars)
+
+let s:cfgvarname_pref = 'ctrlp_tag_'
+let s:cfgvarname_customtagfiles = s:cfgvarname_pref . 'custom_tag_files'
+"? let s:cfgvarname_stdtagfiles_index = s:cfgvarname_pref . 'stdtagfiles_index'
+
+" TODO: implement s:has_tagfiles_data_from_userexpr()
+" TODO: implement s:get_tagfiles_from_userexpr()
+" prev: \		[ 'b:ctrlp_custom_tag_files' ],
+" prev: \		[ 'b:' . s:cfgvarname_pref . 'custom_tag_files' ],
+" prev: \				'get(b:, ''ctrlp_tag_use_gutentags_files'', get(g: ''ctrlp_tag_use_gutentags_files'', !0))' ],
+" prev: \		[ 's:get_tagfiles_from_gutentags()', 's:getcfgval(''use_gutentags_files'', !0)' ],
+" prev: \		[ 'g:ctrlp_custom_tag_files' ],
+" prev: \		[ 'g:' . s:cfgvarname_pref . 'custom_tag_files' ],
+" MAYBE: \		[ 's:get_stdtagfiles_userindex()', 's:uses_stdtagfiles_index()' ], " just before the last one
+let s:get_tagfiles_proclist = [
+	\		[ 'b:' . s:cfgvarname_customtagfiles ],
+	\		[ 's:get_tagfiles_from_userexpr("b")', 's:has_tagfiles_data_from_userexpr("b")' ],
+	\		[ 's:get_tagfiles_from_gutentags()', 's:has_tagfiles_data_from_gutentags()' ],
+	\		[ 'g:' . s:cfgvarname_customtagfiles ],
+	\		[ 's:get_tagfiles_from_userexpr("g")', 's:has_tagfiles_data_from_userexpr("g")' ],
+	\		[ 'tagfiles()' ],
+	\ ]
 " Utilities {{{1
 fu! s:findcount(str, tgaddr)
 	let [tg, ofname] = split(a:str, '\t\+\ze[^\t]\+$')
@@ -77,6 +99,97 @@ fu! s:filter(tags)
 	retu a:tags
 endf
 
+fu! s:getcfgval(varsuf, defval)
+	let varname = s:cfgvarname_pref . a:varsuf
+	retu get(b:, varname, get(g:, varname, a:defval))
+endf
+
+fu! s:getcfg_skip_empty_lists()
+	retu s:getcfgval('skip_empty_lists', 0)
+endf
+
+let s:gutentags_files_tf_keys = [ 'ctags' ]
+
+fu! s:get_tagfiles_data_from_gutentags()
+	let retval_nodata = [0, 0]
+	let gtfiles_dict = get(b:, 'gutentags_files')
+	if type(gtfiles_dict) != 4 | retu retval_nodata | en
+	" MAYBE: add presence/value check for certain elements (or a non-empty dictionary, etc.)
+	" fallback: return what we've got
+	retu [1, gtfiles_dict]
+endf
+
+fu! s:has_tagfiles_data_from_gutentags()
+	if !s:getcfgval('use_gutentags_files', !0) | retu 0 | en
+	retu get(s:get_tagfiles_data_from_gutentags(), 0, 0)
+endf
+
+fu! s:get_tagfiles_from_gutentags()
+	let retval_empty = []
+	let [gt_has_data, gtfiles_dict] = s:get_tagfiles_data_from_gutentags()
+	if (!gt_has_data) || empty(gtfiles_dict) | retu retval_empty | en
+
+	let skip_empty_lists = s:getcfg_skip_empty_lists()
+
+	for k in s:gutentags_files_tf_keys
+		if !has_key(gtfiles_dict, k) | con | en
+		unl! expr_val
+		let expr_val = get(gtfiles_dict, k)
+		if skip_empty_lists && empty(expr_val) | con | en
+		" convert to list, if needed
+		let expr_type = type(expr_val)
+		if expr_type == 1 | retu [ expr_val ] | en
+		if expr_type == 3 | retu expr_val | en
+		" otherwise, continue to the next dictionary entry
+	endfo
+	retu retval_empty
+endf
+
+" move to a more generic module
+fu! s:try_eval(expr, ...)
+	try
+		retu eval(a:expr)
+	cat
+		retu a:0 ? a:1 : 0
+	endt
+endf
+
+fu! s:gettagfiles_on_userbuf() abort
+	let skip_empty_lists = s:getcfg_skip_empty_lists()
+	" orig: let tfs = get(g:, 'ctrlp_custom_tag_files', tagfiles())
+	let tfs = []
+	for proc_item in s:get_tagfiles_proclist
+		try
+			let cond_expr = get(proc_item, 1, '')
+			" conditionally decide whether to consider this entry
+			"+? if !empty(cond_expr) && !eval(cond_expr) | con | en
+			if !empty(cond_expr) && !s:try_eval(cond_expr, 0) | con | en
+
+			let val_expr = proc_item[0]
+			unl! val_res
+			"? let val_res = eval(val_expr)
+			"? sil let val_res = eval(val_expr)
+			"? execute 'let val_res = eval(val_expr)'
+			let val_res = s:try_eval(val_expr, 0)
+			" only consider lists
+			if type(val_res) != 3 | con | en
+			" conditionally skip empty entries
+			if skip_empty_lists && empty(val_res) | con | en
+		cat
+			con
+		endt
+		" we reached the end of this block -> keep the value (exit the loop)
+		let tfs = val_res
+		" TODO: remove from final commit
+		" DEBUG: verbose echomsg printf( 'DEBUG: s:gettagfiles_on_userbuf(): val_expr=%s; cond_expr=%s; tfs=%s', string(val_expr), string(cond_expr), string(tfs))
+		brea
+	endfo
+
+	retu empty(tfs)
+		\ ? tfs
+		\ : filter(map(tfs, 'fnamemodify(v:val, ":p")'), 'filereadable(v:val)')
+endf
+
 fu! s:syntax()
 	if !ctrlp#nosy()
 		cal ctrlp#hicheck('CtrlPTabExtra', 'Comment')
@@ -85,13 +198,20 @@ fu! s:syntax()
 endf
 " Public {{{1
 fu! ctrlp#tag#init()
-	if empty(s:tagfiles) | retu [] | en
 	let g:ctrlp_alltags = []
-	let tagfiles = sort(filter(s:tagfiles, 'count(s:tagfiles, v:val) == 1'))
-	for each in tagfiles
-		let alltags = s:filter(ctrlp#utils#readfile(each))
+	if empty(s:tagfiles) | retu [] | en
+
+	let [tagfiles, tagfiles_seen] = [[], {}]
+	for tagfile in s:tagfiles
+		if has_key(tagfiles_seen, tagfile) | con | en
+		let tagfiles_seen[tagfile] = 1
+		cal add(tagfiles, tagfile)
+
+		let alltags = s:filter(ctrlp#utils#readfile(tagfile))
 		cal extend(g:ctrlp_alltags, alltags)
 	endfo
+	let s:tagfiles = tagfiles
+
 	cal s:syntax()
 	retu g:ctrlp_alltags
 endf
@@ -137,9 +257,7 @@ fu! ctrlp#tag#id()
 endf
 
 fu! ctrlp#tag#enter()
-	let tfs = get(g:, 'ctrlp_custom_tag_files', tagfiles())
-	let s:tagfiles = type(tfs) == 3 && tfs != [] ? filter(map(tfs, 'fnamemodify(v:val, ":p")'),
-		\ 'filereadable(v:val)') : []
+	let s:tagfiles = s:gettagfiles_on_userbuf()
 endf
 "}}}
 

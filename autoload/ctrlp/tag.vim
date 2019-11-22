@@ -43,6 +43,31 @@ let s:get_tagfiles_proclist = [
 	\		[ 'tagfiles()' ],
 	\ ]
 " Utilities {{{1
+" return value:
+"  list of 4 elements:
+"   #0: whether there would be a search/select operation needed
+"       (for tags that only had 0 (no match) or 1 (single match), this would
+"       be zero, for tags that had >= 2 matches, this will be 1).
+"   when return_value[0] is zero:
+"    #1: 0
+"    #2: 0
+"    #3: 0
+"   when return_value[0] is non-zero:
+"    #1:
+"     if non-zero: the tag entries only matched against the "leaf" filename,
+"                  and we could not find a match for the exact filename and/or
+"                  the specified "ex" command to locate the tag;
+"     if zero:     there are non-"fuzzy"/inexact matches.  This does not imply
+"                  that there were "exact" matches at all, though.
+"    #2: list index (+1) of the last match in the calculated (re-arranged)
+"        matched tag entries list.
+"        NOTE: this re-arranged list is made of (in order):
+"         * entries that are present in the current buffer ('%');
+"         * entries that are present in other buffers/files;
+"        if this is zero, then that means that there no matches at all.
+"    #3: len(tag_entries_for_the_selected_symbol_not_considering_the_whole_selected_entry),
+"        which can be zero if no entries for the selected identifier have been
+"        found in the current buffer ('%').
 fu! s:findcount(str, tgaddr)
 	let [tg, ofname] = split(a:str, '\t\+\ze[^\t]\+$')
 	let tgs = taglist('^'.tg.'$')

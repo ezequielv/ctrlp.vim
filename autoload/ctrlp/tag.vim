@@ -206,7 +206,9 @@ fu! s:gettagfiles_on_userbuf() abort
 		" we reached the end of this block -> keep the value (exit the loop)
 		let tfs = val_res
 		" TODO: remove from final commit
-		" DEBUG: verbose echomsg printf( 'DEBUG: s:gettagfiles_on_userbuf(): val_expr=%s; cond_expr=%s; tfs=%s', string(val_expr), string(cond_expr), string(tfs))
+		cal ctrlp#ev_log_printf(
+			\ 's:gettagfiles_on_userbuf(): val_expr=%s; cond_expr=%s; tfs=%s',
+			\	string(val_expr), string(cond_expr), string(tfs))
 		brea
 	endfo
 

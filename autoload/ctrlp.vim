@@ -2772,12 +2772,20 @@ fu! ctrlp#getvar(var)
 	retu {a:var}
 endf
 " Ezequiel - Logging {{{2
-function! s:ev_addtolog(...)
-	retu " uncomment to disable logging
+let s:ev_log_flag = get(g:, 'ctrlp_ev_log', 0)
+let s:ev_log_printf = function('printf')
+function! ctrlp#ev_log_printf(...)
+	if !s:ev_log_flag | retu | en
 	if ( ! exists( 'g:ev_test_log' ) )
 		let g:ev_test_log = []
 	endif
-	call add( g:ev_test_log, printf( '[%s] %s', strftime('%Y.%m.%d %H:%M:%S'), call( 'printf', a:000 ) ) )
+	call add(
+		\	g:ev_test_log,
+		\	printf(
+		\		'[%s] %s',
+		\		strftime('%Y.%m.%d %H:%M:%S'),
+		\		( a:0 > 1 ? call( s:ev_log_printf, a:000 ) : get(a:000, 0, '') )
+		\	))
 endfunction
 "}}}1
 " * Initialization {{{1

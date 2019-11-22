@@ -593,7 +593,7 @@ fu! s:bufparts(bufnr)
 
 	let bname = (empty(bname) ? '[No Name]' : fnamemodify(bname, s:bufname_mod))
 
-	" DEBUG: cal s:ev_addtolog( 's:bufparts(): bname=%s; bpath=%s', string(bname), string(bpath) )
+	" DEBUG: cal ctrlp#ev_log_printf( 's:bufparts(): bname=%s; bpath=%s', string(bname), string(bpath) )
 	retu [idc, hiflags, bname, bpath]
 endf
 
@@ -649,7 +649,7 @@ fu! s:MatchIt(items, pat, limit, exc)
 		if a:limit > 0 && len(lines) >= a:limit | brea | en
 	endfo
 	let s:mdata = [s:dyncwd, s:itemtype, s:regexp, s:sublist(a:items, id, -1)]
-	" DEBUG: cal s:ev_addtolog( 'DEBUG: s:MatchIt(): len(a:items)=%d; len(lines)=%d; a:exc=%s; a:items=%s', len(a:items), len(lines), string(a:exc), string(a:items) )
+	" DEBUG: cal ctrlp#ev_log_printf( 'DEBUG: s:MatchIt(): len(a:items)=%d; len(lines)=%d; a:exc=%s; a:items=%s', len(a:items), len(lines), string(a:exc), string(a:items) )
 	retu lines
 endf
 
@@ -2873,7 +2873,7 @@ fu! ctrlp#init(type, ...)
 	cal s:setlines_pre(s:settype(type))
 	let &filetype = s:DetectFileType(type, &filetype)
 	cal s:setlines_post()
-	" DEBUG: cal s:ev_addtolog( 'DEBUG: init: after s:setlines_post(): len(g:ctrlp_lines)=%d', len(g:ctrlp_lines) )
+	" DEBUG: cal ctrlp#ev_log_printf( 'DEBUG: init: after s:setlines_post(): len(g:ctrlp_lines)=%d', len(g:ctrlp_lines) )
 	cal ctrlp#syntax()
 	cal s:SetDefTxt()
 	let curName = s:CurTypeName()

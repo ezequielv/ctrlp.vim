@@ -713,7 +713,6 @@ endf
 
 fu! s:SplitPattern(str)
 	let str = a:str
-	let s:savestr = str
 	if s:regexp
 		let pat = s:regexfilter(str)
 	el
@@ -783,17 +782,24 @@ endf
 
 fu! s:Update(str)
 	let log_pref = 's:Update(str): '
-	" Get the previous string if existed
-	let oldstr = exists('s:savestr') ? s:savestr : ''
 	" Get the new string sans tail
 	let str = s:sanstail(a:str)
 	cal ctrlp#ev_log_printf(
 		\ log_pref . 'entered. ' .
 		\		'str=%s;', string(str))
-	" Stop if the string's unchanged
-	if str == oldstr && !empty(str) && !exists('s:force') | retu | en
 	" Optionally send the string to a custom validate function
 	if s:validate != '' | let str = call(s:validate, [str]) | en
+
+	" prev: " Get the previous string if existed
+	" prev: let oldstr = exists('s:savestr') ? s:savestr : ''
+	" prev: " Stop if the string's unchanged
+	" prev: if str == oldstr && !empty(str) && !exists('s:force') | retu | en
+	" prev: let s:savestr = str
+	" Stop if the string's unchanged, or if it's the first time this function
+	" gets called (so it needs to return a suitable 'lines' list).
+	if exists('s:savestr') && str == s:savestr && !exists('s:force') | retu | en
+	let s:savestr = str
+
 	let s:martcs = &scs && str =~ '\u' ? '\C' : ''
 	let pat = s:matcher == {} ? s:SplitPattern(str) : str
 	let lines = s:nolim == 1 && empty(str) ? copy(g:ctrlp_lines)

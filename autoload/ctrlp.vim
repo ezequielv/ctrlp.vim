@@ -1901,6 +1901,8 @@ fu! ctrlp#statusline()
 	let marked  = s:opmul != '0' ?
 		\ exists('s:marked') ? ' <'.s:dismrk().'>' : ' <->' : ''
 	if s:status != {}
+		" FIXME: remove
+		cal ctrlp#ev_log_printf('ctlrp: about to use custom status bar')
 		let argms =
 			\ has_key(s:status, 'arg_type') && s:status['arg_type'] == 'dict' ? [{
 			\ 'focus':   focus,
@@ -1913,6 +1915,8 @@ fu! ctrlp#statusline()
 			\ }] : [focus, byfname, s:regexp, prv, s:ctype, nxt, marked]
 		let &l:stl = call(s:status['main'], argms, s:status)
 	el
+		" FIXME: remove
+		cal ctrlp#ev_log_printf('ctlrp: about to use own status bar')
 		let item    = '%#CtrlPMode1# '.s:ctype.' %*'
 		let focus   = '%#CtrlPMode2# '.focus.' %*'
 		let byfname = '%#CtrlPMode1# '.byfname.' %*'
@@ -1921,6 +1925,7 @@ fu! ctrlp#statusline()
 		let dir     = ' %=%<%#CtrlPMode2# %{getcwd()} %*'
 		let &l:stl  = focus.byfname.regex.slider.marked.dir
 	en
+	cal ctrlp#ev_log_printf('ctlrp: statusline: %s', string(&l:stl))
 endf
 
 fu! s:dismrk()

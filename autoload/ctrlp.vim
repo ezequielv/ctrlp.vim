@@ -656,6 +656,7 @@ fu! s:MatchIt(items, pat, limit, exc)
 endf
 
 fu! s:MatchedItems(items, pat, limit)
+	let log_pref = 's:MatchedItems([..]): '
 	let exc = (exists('s:crfilerel') && s:curtype() != 'buf') ? s:crfilerel : ''
 	let items = s:narrowable() ? s:matched + s:mdata[3] : a:items
 	let matcher = s:getextvar('matcher')
@@ -679,6 +680,11 @@ fu! s:MatchedItems(items, pat, limit)
 		let lines = s:MatchIt(items, a:pat, a:limit, exc)
 	en
 	let s:matches = len(lines)
+	cal ctrlp#ev_log_printf(
+		\ log_pref . 'len(a:items)=%d; a:pat=%s; a:limit=%s; ' .
+		\		'matcher=%s; len(lines)=%d; lines[0]=%s;',
+		\	len(a:items), string(a:pat), string(a:limit),
+		\	string(matcher), len(lines), string(get(lines, 0, '<<empty>>')))
 	unl! s:did_exp
 	retu lines
 endf
@@ -754,10 +760,14 @@ fu! s:Render(lines, pat)
 endf
 
 fu! s:Update(str)
+	let log_pref = 's:Update(str): '
 	" Get the previous string if existed
 	let oldstr = exists('s:savestr') ? s:savestr : ''
 	" Get the new string sans tail
 	let str = s:sanstail(a:str)
+	cal ctrlp#ev_log_printf(
+		\ log_pref . 'entered. ' .
+		\		'str=%s;', string(str))
 	" Stop if the string's unchanged
 	if str == oldstr && !empty(str) && !exists('s:force') | retu | en
 	" Optionally send the string to a custom validate function
@@ -766,8 +776,16 @@ fu! s:Update(str)
 	let pat = s:matcher == {} ? s:SplitPattern(str) : str
 	let lines = s:nolim == 1 && empty(str) ? copy(g:ctrlp_lines)
 		\ : s:MatchedItems(g:ctrlp_lines, pat, s:mw_res)
+	cal ctrlp#ev_log_printf(
+		\	log_pref . 'retrieved lines. ' .
+		\		'len(lines)=%d; s:nolim=%d;',
+		\	len(lines), s:nolim)
 	if empty(str) | cal clearmatches() | en
 	cal s:Render(lines, pat)
+	cal ctrlp#ev_log_printf(
+		\	log_pref . 'about to return. ' .
+		\		'len(lines)=%d;',
+		\	len(lines))
 	return lines
 endf
 
@@ -823,16 +841,28 @@ endf
 " * upd_gsts: default: 0
 " * upd_str: default: 0
 fu! s:OnUpdatedState(...)
+	let log_pref = 's:OnUpdatedState(): '
 	let upd_gsts = a:0 > 0 ? a:1 : 0
 	let upd_str = a:0 > 1 ? a:2 : 0
 	let base = ( s:regexp ? 'r' : '>' ).( s:byfname() ? 'd' : '>' ).'> '
 	let str = escape(s:getinput(), '\')
 	let lazy = s:lazy && !exists('s:force') && has('autocmd')
+	cal ctrlp#ev_log_printf(
+		\ log_pref . 'entered. ' .
+		\		'upd_gsts=%d; upd_str=%d; base=%s; str=%s; lazy=%d;',
+		\	upd_gsts, upd_str, string(base), string(str), lazy)
 	if upd_str && (!lazy || empty(str)) && ( s:matches || s:regexp || exists('s:did_exp')
 		\ || str =~ '\(\\\(<\|>\)\|[*|]\)\|\(\\\:\([^:]\|\\:\)*$\)' )
+		cal ctrlp#ev_log_printf(
+			\	log_pref . 'about to call s:Update(str). ' .
+			\		'str=%s; lazy=%d; s:matches=%d; s:regexp=%s; s:did_exp=%s;',
+			\	string(str), lazy, s:matches,
+			\	get( s:, 'regexp', '<unset>'),
+			\	get( s:, 'did_exp', '<unset>'))
 		sil! cal s:Update(str)
 	en
 	if upd_gsts
+		cal ctrlp#ev_log_printf(log_pref . 'about to call ctrlp#statusline()')
 		sil! cal ctrlp#statusline()
 	en
 	" Toggling
@@ -854,6 +884,7 @@ fu! s:OnUpdatedState(...)
 	if empty(prt[1]) && s:focus
 		exe 'echoh' hibase '| echon "_" | echoh None'
 	en
+	cal ctrlp#ev_log_printf(log_pref . 'returning normally')
 endf
 
 " map-friendly version (no parameters)
@@ -2830,12 +2861,16 @@ fu! s:setlines_pre(...)
 endf
 
 fu! s:setlines_post()
+	let log_pref = 's:setlines_post(): '
 	let inits = {'fil': 'ctrlp#files()', 'buf': 'ctrlp#buffers()', 'mru': 'ctrlp#mrufiles#list()'}
 	let types = map(copy(g:ctrlp_types), 'inits[v:val]')
 	if !empty(g:ctrlp_ext_vars)
 		cal map(copy(g:ctrlp_ext_vars), 'add(types, v:val["init"])')
 	en
 	let g:ctrlp_lines = eval(types[s:itemtype])
+	cal ctrlp#ev_log_printf(
+		\	log_pref . ' about to return. len(g:ctrlp_lines)=%d;',
+		\	len(g:ctrlp_lines))
 endf
 
 fu! ctrlp#setlines(...)
@@ -2913,6 +2948,7 @@ fu! ctrlp#init(type, ...)
 	let curName = s:CurTypeName()
 	let shouldExitSingle = index(s:opensingle, curName[0])>=0 || index(s:opensingle, curName[1])>=0
 	if shouldExitSingle && s:ExitIfSingleCandidate()
+		cal ctrlp#ev_log_printf('ctrlp#init(): exiting after a single candidate has been found')
 		return 0
 	en
 	cal s:OnUpdatedState(1, 1)

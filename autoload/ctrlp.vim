@@ -385,7 +385,7 @@ fu! s:Close()
 	" NOTE: 's:last_invocation_env_dict' depends on 's:init', so it's safe to
 	" ':unlet' it here.
 	unl! s:focus s:hisidx s:hstgot s:marked s:statypes s:init s:savestr
-		\ s:mrbs s:did_exp s:last_invocation_env_dict
+		\ s:mrbs s:did_exp s:last_invocation_env_dict s:first_statusline_update
 	cal ctrlp#recordhist()
 	cal s:execextvar('exit')
 	cal s:log(0)
@@ -836,6 +836,31 @@ fu! s:ForceUpdate()
 	cal s:OnUpdatedState(0, 0)
 endf
 
+" MAYBE: refactor to use the winnr == 0 as a special case for not calling
+" winnr() at all (thus reducing the number of interactions with vim's
+" state/windowing system, etc.).
+fu! s:SetWinHeight(height, ...)
+	let winnr = a:0 ? a:1 : 0
+	if winheight(winnr) == a:height | retu 0 | en
+	let [gotowin_cmd_pref, gotowin_cmd_suff] = ['sil ', 'winc w']
+	try
+		let winnr_orig = winnr()
+		" prev: if (winnr != 0) && (winnr == winnr()) | let winnr = 0 | en
+		" prev: if (winnr != 0) && (winnr == winnr_orig) | let winnr = 0 | en
+		if winnr == 0 | let winnr = winnr_orig | en
+		" prev: if winnr != 0
+		if winnr != winnr_orig
+			exe gotowin_cmd_pref . winnr . gotowin_cmd_suff
+		en
+		exe a:height . 'winc _'
+		retu 1
+	fina
+		if winnr() != winnr_orig
+			exe gotowin_cmd_pref . winnr_orig . gotowin_cmd_suff
+		en
+	endt
+endf
+
 " TODO: make these parameters mandatory (they're currently specified on every call)
 " optional args: upd_gsts, upd_str
 " * upd_gsts: default: 0
@@ -871,7 +896,77 @@ fu! s:OnUpdatedState(...)
 		\ : ['CtrlPPrtBase', 'CtrlPPrtBase', tr(base, '>', '-')]
 	let hibase = 'CtrlPPrtBase'
 	if !lazy || upd_gsts || get(s:, 'ut_view', &ut) == 0
-		redr
+		" prev: cal ctrlp#ev_log_printf('s:OnUpdatedState(): about to execute :redraw command')
+		" prev: redr
+		"-? cal ctrlp#ev_log_printf('s:OnUpdatedState(): about to execute :redrawstatus command')
+		"-? redraw! | redrawstatus!
+		"? cal ctrlp#ev_log_printf('s:OnUpdatedState(): about to execute :redraw command')
+		"? try
+		"? 	let lazyredraw_save = &lazyredraw
+		"? 	verbose redr
+		"? finally
+		"? 	let &lazyredraw = lazyredraw_save
+		"? endtry
+		"? cal ctrlp#ev_log_printf('s:OnUpdatedState(): about to execute :redraw command')
+		"? verbose redraw! | verbose redrawstatus!
+		if !get(s:, 'first_statusline_update')
+			let s:first_statusline_update = 1
+			if get(g:, 'ctrlp_issue_initstatuslinenotupdated_workaround')
+				cal ctrlp#ev_log_printf(log_pref . 'first ctrlp window update issue: workaround: simulating keyboard input. attempting to find a suitable keyboard mapping.')
+
+				" choose from a number of candidate mapping keys as candidates, in
+				" order.
+				" prev: \		[ 'ToggleByFname()', 2 ],
+				for [ kmap_key, kmap_count ] in [
+					\		[ 'ScreenRefresh()', 1 ],
+					\		[ 'ToggleRegex()', 2 ],
+					\	]
+					unl! keystrokes
+					" prev: let keystrokes = get(s:prtmaps['ToggleByFname()'], 0, '')
+					let keystrokes = get(s:prtmaps[kmap_key], 0, '')
+					" prev: if !empty(keystrokes)
+					if keystrokes =~# '^<[^<]*>\s*$'
+						let keystrokes_orig = keystrokes
+						" TODO: create a function to detect single-character sequences after
+						" resolving the mapping keysequence to vim's internal keystroke
+						" representation (see ':h expr-quote').
+						let keystrokes = eval('"' . escape(keystrokes, '<') . '"')
+						" TODO: improve on this check.
+						" for now, we cheaply make sure that the sequence we're sending to
+						" feedkeys() consists of a single character, which is to be made of
+						" a "\<key>" sequence.
+						if len(keystrokes) == 1
+							cal ctrlp#ev_log_printf(
+								\	log_pref . ' using keyboard mapping %s, count=%d',
+								\	string(keystrokes_orig), kmap_count)
+							" prev: cal feedkeys(keystrokes . keystrokes)
+							cal feedkeys(repeat(keystrokes, kmap_count))
+							brea
+						en
+					en
+				endfo
+			elsei 0
+				cal ctrlp#ev_log_printf(log_pref . 'first ctrlp window update: trying to force a statusline update')
+				try
+					let wincrstate = s:GetWinCursorState()
+					let [wh_save, wh_this_save] = [&wh, winheight(0)]
+
+					let wh_temp = (wh_this_save == 1) ? 2 : 1
+					" MAYBE: set zero, one, or something else?
+					let &wh = wh_temp
+					"? let changed_wh = s:SetWinHeight(wh_temp)
+					cal s:SetWinHeight(wh_temp)
+
+				fina
+					if exists('wh_save') | let &wh = wh_save | en
+					if exists('wh_this_save') | cal s:SetWinHeight(wh_this_save) | en
+					if exists('wincrstate') | cal s:SetWinCursorState(wincrstate) | en
+				endt
+			en
+		el
+			cal ctrlp#ev_log_printf(log_pref . 'about to execute :redraw command')
+			redr
+		en
 	en
 	" Build it
 	let prt = copy(s:prompt)

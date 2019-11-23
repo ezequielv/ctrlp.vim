@@ -386,6 +386,7 @@ fu! s:Close()
 	" ':unlet' it here.
 	unl! s:focus s:hisidx s:hstgot s:marked s:statypes s:init s:savestr
 		\ s:mrbs s:did_exp s:last_invocation_env_dict s:first_statusline_update
+		\ s:matcher_run_success
 	cal ctrlp#recordhist()
 	cal s:execextvar('exit')
 	cal s:log(0)
@@ -659,26 +660,47 @@ fu! s:MatchedItems(items, pat, limit)
 	let log_pref = 's:MatchedItems([..]): '
 	let exc = (exists('s:crfilerel') && s:curtype() != 'buf') ? s:crfilerel : ''
 	let items = s:narrowable() ? s:matched + s:mdata[3] : a:items
-	let matcher = s:getextvar('matcher')
-	if empty(matcher) || type(matcher) != 4 || !has_key(matcher, 'match')
-		unlet matcher
-		let matcher = s:matcher
-	en
-	if matcher != {}
-		let argms =
-			\ has_key(matcher, 'arg_type') && matcher['arg_type'] == 'dict' ? [{
-			\ 'items':  items,
-			\ 'str':    a:pat,
-			\ 'limit':  a:limit,
-			\ 'mmode':  s:mmode(),
-			\ 'ispath': s:ispath,
-			\ 'crfile': exc,
-			\ 'regex':  s:regexp,
-			\ }] : [items, a:pat, a:limit, s:mmode(), s:ispath, exc, s:regexp]
-		let lines = call(matcher['match'], argms, matcher)
-	el
-		let lines = s:MatchIt(items, a:pat, a:limit, exc)
-	en
+	wh !0
+		let matcher = s:getextvar('matcher')
+		if empty(matcher) || type(matcher) != 4 || !has_key(matcher, 'match')
+			unl matcher
+			let matcher = s:matcher
+		en
+		if !get(s:, 'matcher_run_success', !0)
+			unl matcher
+			let matcher = {}
+		en
+		if matcher != {}
+			try
+				let argms =
+					\ has_key(matcher, 'arg_type') && matcher['arg_type'] == 'dict' ? [{
+					\ 'items':  items,
+					\ 'str':    a:pat,
+					\ 'limit':  a:limit,
+					\ 'mmode':  s:mmode(),
+					\ 'ispath': s:ispath,
+					\ 'crfile': exc,
+					\ 'regex':  s:regexp,
+					\ }] : [items, a:pat, a:limit, s:mmode(), s:ispath, exc, s:regexp]
+				let lines = call(matcher['match'], argms, matcher)
+				let s:matcher_run_success = !0
+			cat
+				let s:matcher_run_success = 0
+				" TODO: report error (v:errmsg, v:exception, etc.) consistently (other
+				" ctrlp function?)
+				" prev: \		'v:exception=%s; v:errmsg=%s; matcher=%s;',
+				" prev:	\	string(v:exception), string(v:errmsg), string(matcher))
+				cal ctrlp#ev_log_printf(
+					\	log_pref . 'running the matcher raised an exception. ' .
+					\		'v:exception=%s; v:throwpoint=%s; matcher=%s;',
+					\	string(v:exception), string(v:throwpoint), string(matcher))
+				con
+			endt
+		el
+			let lines = s:MatchIt(items, a:pat, a:limit, exc)
+		en
+		brea
+	endw
 	let s:matches = len(lines)
 	cal ctrlp#ev_log_printf(
 		\ log_pref . 'len(a:items)=%d; a:pat=%s; a:limit=%s; ' .

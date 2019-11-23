@@ -773,6 +773,9 @@ fu! s:Render(lines, pat)
 	cal s:unmarksigns()
 	cal s:remarksigns()
 	" Highlighting
+	" orig: if s:dohighlight()
+	" TODO: do this better (runtime toggle (add keyboard mapping))
+	"-? if s:dohighlight() && get(g:, 'ctrlp_match_highlight', 1)
 	if s:dohighlight()
 		cal s:highlight(pat, s:mathi[1])
 	en
@@ -801,6 +804,8 @@ fu! s:Update(str)
 	let s:savestr = str
 
 	let s:martcs = &scs && str =~ '\u' ? '\C' : ''
+	" MAYBE: TODO: would we need to also create a "highlighter-friendly" version
+	" of the input 'str' that will be used by vim to produce the matches?
 	let pat = s:matcher == {} ? s:SplitPattern(str) : str
 	let lines = s:nolim == 1 && empty(str) ? copy(g:ctrlp_lines)
 		\ : s:MatchedItems(g:ctrlp_lines, pat, s:mw_res)
@@ -1923,6 +1928,8 @@ fu! ctrlp#statusline()
 		let regex   = s:regexp  ? '%#CtrlPMode2# regex %*' : ''
 		let slider  = ' <'.prv.'>={'.item.'}=<'.nxt.'>'
 		let dir     = ' %=%<%#CtrlPMode2# %{getcwd()} %*'
+		" TODO: remove: same?: cal setwinvar(winnr(), '&stl', focus.byfname.regex.slider.marked.dir)
+		" TODO: remove: still does not work: setlocal statusline=this_is_ctrlp_s_internal_statusline
 		let &l:stl  = focus.byfname.regex.slider.marked.dir
 	en
 	cal ctrlp#ev_log_printf('ctlrp: statusline: %s', string(&l:stl))
@@ -2184,6 +2191,8 @@ fu! ctrlp#syntax()
 	en
 
 	if s:curtype() == 'buf' && s:has_conceal
+		" MAYBE: use the same 'escape()' value as above, and use
+		" 'g:ctrlp_line_prefix' instead of the fixed '>'?
 		sy region CtrlPBufferNr     matchgroup=CtrlPLinePre start='^>\s\+' end='\s'
 		sy region CtrlPBufferInd    concealends matchgroup=Ignore start='<bi>' end='</bi>'
 		sy region CtrlPBufferRegion concealends matchgroup=Ignore start='<bn>' end='</bn>'
@@ -2209,10 +2218,17 @@ fu! s:highlight(pat, grp)
 			let pat = a:pat
 
 			" get original characters so we can rebuild pat
+			" TODO: consider the tab escape sequence here as well
+			" MAYBE: consider every [^{stuff}] regex? or would that hit "too much"
+			" (user regexes?).
 			let chars = split(pat, '\[\^\\\?.\]\\{-}')
 
+			" TODO: consider whether we will span across tabs (probably not)
 			" Build a pattern like /a.*b.*c/ from abc (but with .\{-} non-greedy
 			" matchers instead)
+			" FIXME: only add the '\t' if the match type would merit that.
+			" orig: let pat = join(chars, '.\{-}')
+			"? let pat = join(chars, '[^\t]\{-}')
 			let pat = join(chars, '.\{-}')
 			" Ensure we match the last version of our pattern
 			let ending = '\(.*'.pat.'\)\@!'
@@ -2817,6 +2833,18 @@ fu! s:matchtabe(item, pat)
 	retu match(split(a:item, '\t\+[^\t]\+$')[0], a:pat)
 endf
 
+" FIXME: we should consider several aspects of the current "match type" in
+" order to:
+"  * skip the optional line marker at the beginning of the line (this can
+"    always be skipped for every line, maybe by using a zero-length match or
+"    something more efficient?);
+"  * choose the right value(s) to match something more specific than just:
+"    'x[^x/]' (s:matchnatural) or 'x[^x]' (otherwise).
+" IDEA: accept an (optional?) argument with the forbidden characters
+"  (when matching with a match type of "data is up to the first tab", we could
+"  specify '\t' for example).
+" NOTE: we want to create a regex that is efficient and that won't match
+"  things we don't want it to.
 fu! s:buildpat(lst)
 	let pat = a:lst[0]
 	if s:matchnatural == 1

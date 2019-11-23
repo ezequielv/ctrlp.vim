@@ -382,8 +382,10 @@ fu! s:Close()
 	if s:winres[1] >= &lines && s:winres[2] == winnr('$')
 		exe s:winres[0].s:winres[0]
 	en
+	" NOTE: 's:last_invocation_env_dict' depends on 's:init', so it's safe to
+	" ':unlet' it here.
 	unl! s:focus s:hisidx s:hstgot s:marked s:statypes s:init s:savestr
-		\ s:mrbs s:did_exp
+		\ s:mrbs s:did_exp s:last_invocation_env_dict
 	cal ctrlp#recordhist()
 	cal s:execextvar('exit')
 	cal s:log(0)
@@ -2526,6 +2528,38 @@ fu! s:getenv()
 		\ ? '['.s:crbufnr.'*No Name]' : expand('%:p', 1)
 	let s:crfpath = expand('%:p:h', 1)
 	let s:mrbs = ctrlp#mrufiles#bufs()
+	unl! s:last_invocation_env_dict
+endf
+
+" returns a dictionary with some of the variables loaded in 's:getenv()'.
+" NOTE: the dictionary elements do not hold copies of "reference" objects,
+" such as lists and dictionaries.  If the caller needs to operate on the
+" values, it needs to make copies or make sure it would not change the objects
+" pointed to by those dictionary entries.
+" Returns a (possibly cached) dictionary object, which could be empty if this
+" call has been made after calling 'ctrlp#exit()' (or 's:PrtExit()', etc.)
+" NOTE: the dictionary entries themselves might be re-assigned, but we can
+" assume the values themselves are immutable.  Therefore, a 'copy()' is enough
+" (no need to call 'deepcopy()' on the reutrn value).
+fu! ctrlp#get_last_invocation_env()
+	if !exists('s:init') | retu {} | en
+	if !exists('s:last_invocation_env_dict')
+		" NOTE: variables like 's:crfilerel' can change during 'ctrlp's execution
+		" ('ctrlp#setdir()').
+		"  QUESTION: could some of these other values change, too?
+		let s:last_invocation_env_dict = {
+			\		'crword': s:crword,
+			\		'crnbword': s:crnbword,
+			\		'crgfile': s:crgfile,
+			\		'crline': s:crline,
+			\		'crcursor': s:crcursor,
+			\		'crbufnr': s:crbufnr,
+			\		'cwd': s:cwd,
+			\		'crfile': s:crfile,
+			\		'crfpath': s:crfpath,
+			\ }
+	en
+	retu s:last_invocation_env_dict
 endf
 
 fu! s:lastvisual()

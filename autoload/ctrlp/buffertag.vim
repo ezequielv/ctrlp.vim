@@ -285,41 +285,13 @@ endf
 " guaranteed to have a particular content (empty or otherwise).
 " LATER: make the above behaviour configurable?
 fu! s:tmpfilenamefor(fname, ftype)
-	if !exists('s:tempfiles_base')
-		" find a temporary file/dir that has not yet been created by other
-		" scripts.
-		" LATER: make sure these checks (/'for' loop) are necessary
-		for i in range(5)
-			let fname_now = tempname()
-			if empty(glob(fname_now))
-				" check if the base_file/directory could be created
-				if s:tempfiles_base_isdir
-					try
-						" NOTE: permissions set to make this only readable by the current
-						" process effective user.
-						" NOTE: throws an exception on failure
-						cal mkdir(fname_now, '', 0700)
-					cat | con | endt
-				el
-					" create an empty(-ish) file
-					sil if writefile([], fname_now, 'b') != 0 | con | en
-				en
-				let s:tempfiles_base = fname_now
-				break
-			en
-		endfo
-		if !exists('s:tempfiles_base')
-			retu ''
-		en
-	en
 	if !exists('s:tempfilenames')
 		let s:tempfilenames = {}
 	en
+
 	let fname = fnamemodify(bufname(a:fname), ':p')
-	let tempfname = (
-		\ s:tempfiles_base .
-		\ (s:tempfiles_base_isdir ? '/' : '-' ) .
-		\ fnamemodify(fname, ':t'))
+	let tempfname = ctrlp#tmpfm#get_tmpfilename_for(s:id, fnamemodify(fname, ':t'))
+
 	" NOTE: we don't check whether this file exists or not, as we might be using
 	" two files from different directories named the same way, and also we don't
 	" want to rule out calling this function twice for the same file at
@@ -332,33 +304,11 @@ fu! s:tmpfilenamefor(fname, ftype)
 endf
 
 fu! s:rmtempfiles()
-	let tempfnames = keys(get(s:, 'tempfilenames', {}))
-	let tempfiles_base = get(s:, 'tempfiles_base')
-	" delete the main file (if that was set) last, to help other vim instances
-	" to not create files based on the same "base" name.
-	if (!empty(tempfiles_base)) && (!s:tempfiles_base_isdir)
-		cal add(tempfnames, tempfiles_base)
-	en
-	for fname in tempfnames
-		" MAYBE: report error in removing the temporary file(s) ('delete()' return
-		" value) (but check that the file existed before trying to call 'delete()'
-		" to avoid reporting an error that is not necessarily I/O related, as an
-		" entry in a dictionary pointing to a file that's not there in the first
-		" place might not be strictly an I/O error at this point).
-		"  IDEA: for fname in filter(tempfnames, '!empty(glob(v:val))')
-		"   MAYBE: or even ...filter(copy(tempfnames), ...)
-		cal delete(fname)
-	endfo
-	unl tempfnames
-
-	" remove the base directory, if necessary
-	if (!empty(tempfiles_base)) && s:tempfiles_base_isdir
-		\ && isdirectory(tempfiles_base)
-		" MAYBE: report error
-		" NOTE: for now, we ignore the return value (this should not fail)
-		cal ctrlp#utils#remove_directory(tempfiles_base)
-	en
-	unl! s:tempfilenames s:tempfiles_base
+	try
+		cal ctrlp#tmpfm#cleanup_for(s:id)
+	fina
+		unl! s:tempfilenames
+	endt
 endf
 
 " optional args:

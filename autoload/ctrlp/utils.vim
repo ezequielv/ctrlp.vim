@@ -53,9 +53,18 @@ fu! ctrlp#utils#readfile(file)
 	retu []
 endf
 
-fu! ctrlp#utils#mkdir(dir)
+" optional args:
+" * silent_flag (int (bool), default: true):
+"		if "truthy", then errors are ignored.
+"		if "falsy", errors are propagated.
+fu! ctrlp#utils#mkdir(dir, ...)
 	if exists('*mkdir') && !isdirectory(a:dir)
-		sil! cal mkdir(a:dir, 'p')
+		" TODO: LATER: if a:0 && a:1
+		if (!a:0) || a:1
+			sil! cal mkdir(a:dir, 'p')
+		el
+			cal mkdir(a:dir, 'p')
+		en
 	en
 	retu a:dir
 endf
@@ -105,6 +114,7 @@ fu! ctrlp#utils#can_remove_directories() abort
 			endt
 		en
 		let s:can_remove_directories_result = !!res
+		" MAYBE: add detection for the 'rf' value in the 'flags' parameter.
 	en
 	retu s:can_remove_directories_result
 endf

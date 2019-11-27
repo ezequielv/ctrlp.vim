@@ -389,6 +389,7 @@ fu! s:Close()
 		\ s:matcher_run_success
 	cal ctrlp#recordhist()
 	cal s:execextvar('exit')
+	cal ctrlp#tmpfm#cleanup()
 	cal s:log(0)
 	let v:errmsg = s:ermsg
 	ec

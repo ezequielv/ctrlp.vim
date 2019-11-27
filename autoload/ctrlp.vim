@@ -387,6 +387,8 @@ fu! s:Close()
 	unl! s:focus s:hisidx s:hstgot s:marked s:statypes s:init s:savestr
 		\ s:mrbs s:did_exp s:last_invocation_env_dict s:first_statusline_update
 		\ s:matcher_run_success
+	" TODO: call each of these regardless whether any of the previous functions
+	" failed, but propagate the (first?) raised exception.
 	cal ctrlp#recordhist()
 	cal s:execextvar('exit')
 	cal ctrlp#tmpfm#cleanup()

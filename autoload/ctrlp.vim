@@ -816,7 +816,7 @@ fu! s:Update(str)
 		\	log_pref . 'retrieved lines. ' .
 		\		'len(lines)=%d; s:nolim=%d;',
 		\	len(lines), s:nolim)
-	if empty(str) | cal clearmatches() | en
+	if s:dohighlight() && empty(str) | cal clearmatches() | en
 	cal s:Render(lines, pat)
 	cal ctrlp#ev_log_printf(
 		\	log_pref . 'about to return. ' .

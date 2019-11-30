@@ -398,7 +398,43 @@ fu! s:process(fname, ftype)
 
 	" NOTE: this could be either a string (if the variable is not available), or
 	" a number.
-	let changedtick = getbufvar(a:fname, 'changedtick')
+	" FIXME: vim-7.0: this 'getbufvar(any_buffer_name, 'changedtick')' returns
+	" the empty string every time.
+	"  done: create a function: ctrlp#utils#getbufchangedtick() that checks the
+	"  return value of getbufvar() with (for example) strlen(rc) to see whether
+	"  it's got a sensible (integer) value.  If it didn't, then it can use
+	"  'noautocmd keepalt keepjumps (if available)', etc. to switch to the buffer,
+	"  retrieve the variable with 'b:', and then switch back
+	"   done: create a function to evaluate an expression in a buffer, returning
+	"   to the previous one.
+	"   done: then have ctrlp#utils#getbufvar(bufexp, varname,
+	"   type_id_or_string_expr_to_validate_correct_value, defvalue) use that
+	"   function.
+	"   not_needed: then have ctrlp#utils#getbufchangedtick() call
+	"   ctrlp#utils#getbufvar().
+	" prev: let changedtick = getbufvar(a:fname, 'changedtick')
+	"+? let changedtick = ctrlp#utils#getbufvar(a:fname, 'changedtick')
+	" FIXME: remove: testing {{{
+	if 0
+		let changedtick = 1
+	elseif 1
+		let changedtick = ctrlp#utils#getbufvar(a:fname, 'changedtick')
+	elseif 0
+		let changedtick = getbufvar(a:fname, 'changedtick')
+	else
+		try
+			let changedtick = ctrlp#utils#getbufvar(a:fname, 'changedtick')
+			cal ctrlp#ev_log_printf(
+				\	'ctrlp#utils#getbufvar() returned normally. changedtick=%d;',
+				\	changedtick)
+		cat
+			cal ctrlp#ev_log_printf(
+				\	'ctrlp#utils#getbufvar() threw an exception: v:exception=%s; v:throwpoint=%s;',
+				\	string(v:exception), string(v:throwpoint))
+			let changedtick = getbufvar(a:fname, 'changedtick')
+		endt
+	endif
+	" }}}
 	let change_id_val = ctags_use_origfile
 		\ ? 'ftime:' . getftime(a:fname)
 		\ : 'changedtick:' . changedtick
@@ -461,6 +497,10 @@ fu! s:process(fname, ftype)
 		en
 		let g:ctrlp_buftags[lines_cache_key] = cache_entry
 	en
+	" TODO: remove logging from final commit
+	cal ctrlp#ev_log_printf(
+		\ 's:process(): exiting normally. len(lines)=%d;',
+		\	len(lines))
 	retu lines
 endf
 

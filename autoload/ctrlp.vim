@@ -3003,13 +3003,28 @@ function! ctrlp#ev_log_printf(...)
 	if ( ! exists( 'g:ev_test_log' ) )
 		let g:ev_test_log = []
 	endif
+
+	if a:0 > 1
+		let printf_args = a:000
+		try
+			let logmsg = call(s:ev_log_printf, printf_args)
+		cat
+			let logmsg = call(
+				\	s:ev_log_printf,
+				\	[
+				\		'[log_exception] printf() args: %s; exception: %s; throwpoint=%s;',
+				\		string(printf_args),
+				\		string(v:exception),
+				\		string(v:throwpoint),
+				\	])
+		endt
+	el
+		let logmsg = get(a:000, 0, '')
+	en
+
 	call add(
 		\	g:ev_test_log,
-		\	printf(
-		\		'[%s] %s',
-		\		strftime('%Y.%m.%d %H:%M:%S'),
-		\		( a:0 > 1 ? call( s:ev_log_printf, a:000 ) : get(a:000, 0, '') )
-		\	))
+		\	printf('[%s] %s', strftime('%Y.%m.%d %H:%M:%S'), logmsg))
 endfunction
 "}}}1
 " * Initialization {{{1

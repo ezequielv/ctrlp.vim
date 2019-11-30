@@ -825,48 +825,15 @@ fu! s:Update(str)
 	return lines
 endf
 
-if exists('*getcurpos')
-	fu! s:GetCurrentCursorPos()
-		return getcurpos()
-	endf
-el
-	fu! s:GetCurrentCursorPos()
-		return getpos('.')
-	endf
-en
-
-" TODO: call this later (replace calls to s:GetCurrentCursorPos() and setpos()
-" with these, etc.) {{{
-fu! s:GetWinCursorState()
-	let cursor_pos = s:GetCurrentCursorPos()
-	let wincurstate = {
-				\ 'cursor_pos': cursor_pos,
-				\ }
-
-	sil keepj normal! H0
-	let wincurstate.win_h_pos = s:GetCurrentCursorPos()
-
-	cal setpos('.', cursor_pos)
-
-	return wincurstate
-endf
-
-fu! s:SetWinCursorState(wincurstate)
-	cal setpos('.', a:wincurstate.win_h_pos)
-	sil! normal! zt
-	cal setpos('.', a:wincurstate.cursor_pos)
-endf
-" }}}
-
 fu! s:ForceUpdate()
-	let wincrstate = s:GetWinCursorState()
+	let wincrstate = ctrlp#utils#getwincursorstate()
 	" NOTE: see also (':help'): winheight(), 'winheight', 'winminheight'
 	let wh = &wh
 	let &wh = winheight(0)
 
 	sil! cal s:Update(escape(s:getinput(), '\'))
 
-	cal s:SetWinCursorState(wincrstate)
+	cal ctrlp#utils#setwincursorstate(wincrstate)
 	let &wh = wh
 
 	cal s:OnUpdatedState(0, 0)
@@ -984,7 +951,7 @@ fu! s:OnUpdatedState(...)
 			elsei 0
 				cal ctrlp#ev_log_printf(log_pref . 'first ctrlp window update: trying to force a statusline update')
 				try
-					let wincrstate = s:GetWinCursorState()
+					let wincrstate = ctrlp#utils#getwincursorstate()
 					let [wh_save, wh_this_save] = [&wh, winheight(0)]
 
 					let wh_temp = (wh_this_save == 1) ? 2 : 1
@@ -996,7 +963,7 @@ fu! s:OnUpdatedState(...)
 				fina
 					if exists('wh_save') | let &wh = wh_save | en
 					if exists('wh_this_save') | cal s:SetWinHeight(wh_this_save) | en
-					if exists('wincrstate') | cal s:SetWinCursorState(wincrstate) | en
+					if exists('wincrstate') | cal ctrlp#utils#setwincursorstate(wincrstate) | en
 				endt
 			en
 		el
@@ -1198,10 +1165,10 @@ endf
 fu! s:PrtSelectMove(dir)
 	let dirs = {'t': 'gg','b': 'G','j': 'j','k': 'k','u': "\<C-b>",'d': "\<C-f>"}
 	exe 'keepj norm!' dirs[a:dir]
-	let wincrstate = s:GetWinCursorState()
+	let wincrstate = ctrlp#utils#getwincursorstate()
 	cal s:OnUpdatedState(0, 0)
 	cal s:OnPrtCursorMoved()
-	cal s:SetWinCursorState(wincrstate)
+	cal ctrlp#utils#setwincursorstate(wincrstate)
 endf
 
 fu! s:PrtSelectJump(char)
@@ -1224,10 +1191,10 @@ fu! s:PrtSelectJump(char)
 			let [jmpln, s:jmpchr] = [npos == -1 ? pos : npos, [chr, npos]]
 		en
 		exe 'keepj norm!' ( jmpln + 1 ).'G'
-		let wincrstate = s:GetWinCursorState()
+		let wincrstate = ctrlp#utils#getwincursorstate()
 		cal s:OnUpdatedState(0, 0)
 		cal s:OnPrtCursorMoved()
-		cal s:SetWinCursorState(wincrstate)
+		cal ctrlp#utils#setwincursorstate(wincrstate)
 	en
 endf
 " Misc {{{2

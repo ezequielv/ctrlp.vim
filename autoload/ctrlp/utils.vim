@@ -30,6 +30,412 @@ endf
 cal ctrlp#utils#opts()
 
 let s:wig_cond = v:version > 702 || ( v:version == 702 && has('patch051') )
+
+" Vim feature/command/function support {{{1
+"? let s:expr_supported_dict = {}
+
+" table with "fixes" for broken detections
+let s:supported_expr_localtable = {
+	\		':noautocmd': has('autocmd'),
+	\ }
+
+fu! ctrlp#utils#make_cmdstr_supported(cmd_list) abort
+	" prev: "+ retu join(
+	" prev: "+ 	\	filter(
+	" prev: "+ 	\		copy(a:cmd_list),
+	" prev: "+ 	\		'!empty(v:val) && (exists('':'' . v:val) == 2)'),
+	" prev: "+ 	\	' ')
+	" prev: retu join(
+	" prev: 	\	filter(
+	" prev: 	\		copy(a:cmd_list),
+	" prev: 	\		'!empty(v:val) && (exists('':'' . substitute(v:val, ''[!]'', '''', ''g'')) == 2)'),
+	" prev: 	\	' ')
+	"-? let expr_exists = ':' . substitute(v:val, '[!]', '', 'g')
+	"-? " TODO: update s:supported_expr_localtable, too
+	"-? " prev: retu join(
+	"-? " prev: 	\	filter(
+	"-? " prev: 	\		copy(a:cmd_list),
+	"-? " prev: 	\		'!empty(v:val) && (exists(expr_exists) == 2)'),
+	"-? " prev: 	\	' ')
+	"-? retu join(
+	"-? 	\	filter(
+	"-? 	\		copy(a:cmd_list),
+	"-? 	\		'!empty(v:val) && ' .
+	"-? 	\			'(has_key(s:supported_expr_localtable, expr_exists) ' .
+	"-? 	\			'	?	s:supported_expr_localtable[expr_exists] ' .
+	"-? 	\			'	:	extend( ' .
+	"-? 	\			'			s:supported_expr_localtable, ' .
+	"-? 	\			'			{expr_exists: (exists(expr_exists) == 2)} ' .
+	"-? 	\			'		)[expr_exists] ' .
+	"-? 	\			')'),
+	"-? 	\	' ')
+	" prev: (at the beginning of outer 'filter()'): \			'!empty(v:val[1]) && ' .
+	" NOTE: regex in the "outer" 'filter()': cope with '2match' and user commands
+	" NOTE: substitute() in the inner 'map()': allow list elements constisting
+	" of commands and parameters, but just check on the first
+	" (whitespace-separated) word as the command name.
+	retu join(
+		\	map(
+		\		filter(
+		\			map(
+		\				filter(
+		\					copy(a:cmd_list),
+		\					'!empty(v:val)'),
+		\				'['':'' . substitute(substitute(v:val, ''[!]'', '''', ''g''), ''\s.*$'', '''', ''''), ' .
+		\				' v:val]'),
+		\			'(v:val[0] =~# ''\v^:\d*\a[[:alnum:]_]*$'') && ' .
+		\				'(has_key(s:supported_expr_localtable, v:val[0]) ' .
+		\				'	?	s:supported_expr_localtable[v:val[0]] ' .
+		\				'	: (exists(v:val[0]) == 2) ' .
+		\				')'),
+		\		'v:val[1]'),
+		\	' ')
+endf
+
+" Buffers and variables {{{1
+" FIXME: remove once complete
+" NOTE: switching to another and back does reload that buffer if there were no
+" other windows with that buffer open, so (for example) local overrides to
+" certain options would be lost (I've tested with a vim help document with a
+" local override of 'setl nowrap', and calling
+" ctrlp#utils#eval_expr_in_buffer() resulted in that buffer "recovering" the
+" global value and losing the local override).
+let s:eval_expr_in_buffer_use_tabs = !0
+
+	"   done: create a function to evaluate an expression in a buffer, returning
+	"   to the previous one.
+	"   IDEA: then have ctrlp#utils#getbufvar(bufexp, varname,
+	"   type_id_or_string_expr_to_validate_correct_value, defvalue) use that
+	"   function.
+	"   IDEA: then have ctrlp#utils#getbufchangedtick() call
+	"   ctrlp#utils#getbufvar().
+fu! ctrlp#utils#eval_expr_in_buffer(bufexp, expr) abort
+	" prev: let sav_bufnr = bufnr('%')
+	let cur_bufnr = bufnr('%')
+	let sav_lazyredraw = &lazyredraw
+	let sav_shortmess = &shortmess
+	let opts_ui_set = 0
+	"+ \	'silent', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
+	"+? \	'silent!', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
+	" TODO: put the body of the option-changing inside a function, and call
+	" that instead of having the full body as inline code.
+	let cmd_screencommon_prepare =
+		\	'if !opts_ui_set | ' .
+		\	' if !&lazyredraw | ' .
+		\	'  set lazyredraw | ' .
+		\	' en | ' .
+		\ ' unl! t_s | ' .
+		\	' for t_s in filter( ' .
+		\	'   ["a", "t", "T", "o", "O", "s", "W", "A", "F"], ' .
+		\	'   "stridx(&shortmess, v:val) < 0") | ' .
+		\	'  try | exe "set shortmess+=" . t_s | cat | endt | ' .
+		\	' endfo | ' .
+		\ ' unl! t_s | ' .
+		\	' let opts_ui_set=1 | ' .
+		\	'en'
+	let cmd_screencommon_pref = cmd_screencommon_prepare . ' | '
+	if s:eval_expr_in_buffer_use_tabs
+		let cmd_tabpagecommon_pref = cmd_screencommon_pref .
+			\	ctrlp#utils#make_cmdstr_supported([
+			\		'silent', 'keepalt', 'keepjumps', 'noautocmd'])
+	el
+		let cmd_gotobuf_pref = cmd_screencommon_pref .
+			\	ctrlp#utils#make_cmdstr_supported([
+			\		'silent', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
+	en
+	try
+		let dst_bufnr = bufnr(a:bufexp)
+		" prev: if dst_bufnr != sav_bufnr
+		if dst_bufnr != cur_bufnr
+			exe cmd_screencommon_prepare
+			if s:eval_expr_in_buffer_use_tabs
+				let sav_tabpage = tabpagenr()
+				exe cmd_tabpagecommon_pref tabpagenr('$') . 'tab sbuffer' dst_bufnr
+			el
+				let sav_wincurstate = ctrlp#utils#getwincursorstate()
+				let sav_bufnr = cur_bufnr
+				" prev: set lazyredraw
+				exe cmd_gotobuf_pref 'b' dst_bufnr
+			en
+		en
+		" MAYBE: save and restore cursor position (including relative position
+		" with respect to the window top, etc.).
+		" NOTE: for now, this expression is evaluated inside the ':h sandbox'.
+		sandbox retu eval(a:expr)
+
+	fina
+		if exists('sav_tabpage') && (sav_tabpage != tabpagenr())
+			" MAYBE: validate that the buffer is the correct one, and/or there is
+			" only one window in this tab, etc.
+			exe cmd_tabpagecommon_pref 'hide tabclose'
+			exe cmd_tabpagecommon_pref 'normal!' sav_tabpage . 'gt'
+		en
+		" prev: if sav_bufnr != bufnr('%')
+		if exists('sav_bufnr') && (sav_bufnr != bufnr('%'))
+			if s:eval_expr_in_buffer_use_tabs
+				" TODO: raise exception: this should not happen
+			el
+				" prev: set lazyredraw
+				exe cmd_gotobuf_pref 'b' sav_bufnr
+			en
+		en
+		if exists('sav_wincurstate')
+			exe cmd_screencommon_prepare
+			cal ctrlp#utils#setwincursorstate(sav_wincurstate)
+		en
+		if &shortmess != sav_shortmess
+			let &shortmess = sav_shortmess
+		en
+		if &lazyredraw != sav_lazyredraw
+			let &lazyredraw = sav_lazyredraw
+		en
+	endt
+endf
+
+let s:typeid_num = type(0)
+let s:typeid_str = type('')
+let s:typeid_list = type([])
+let s:typeid_dict = type({})
+
+let s:empty_vals_by_typeid = {
+	\		(s:typeid_num): 0,
+	\		(s:typeid_str): '',
+	\		(s:typeid_list): [],
+	\		(s:typeid_dict): {},
+	\ }
+
+" NOTE: throws for unsupported typeids.
+fu! ctrlp#utils#getemptyval_bytypeid(typid) abort
+	retu copy(s:empty_vals_by_typeid[a:typid])
+endf
+
+let s:getbufvar_knowntypeidvalidexpr_dict = {
+	\		'changedtick': s:typeid_num,
+	\ }
+
+" object that can be compared with the 'is'/'isnot' comparison operator.
+let s:internal_obj_ref = []
+
+" optional parameters:
+"
+"		typid_or_validexpr:
+"			* if a:typid_or_validexpr is a number ('type()' return value):
+"				validate the variable's type against this typeid;
+"			* if a:typid_or_validexpr is a string: this is a boolean expression that
+"				is to be used to validate that the retrieved value is valid:
+"				NOTE: use the empty string for an "always true" shortcut expression,
+"				regardless of whether the variable might be known to this function or
+"				not;
+"				NOTE: use 'v:val' to refer to the value being validated.
+"			* if the variable name is "known" to this function (such as
+"				'changedtick'): the function behaves as if the caller has specified a
+"				suitable type/validation expression and a vim-compatible default.
+"
+"		default_value:
+"			if none of the attempts to retrieve the variable has worked, then this
+"			default value will be returned.  No attempt to validate this return
+"			valid against 'a:typid_or_validexpr' is made by this function.
+"			NOTE: if this parameter is unspecified:
+"				* if a:typid_or_validexpr was not specified: it returns the empty
+"					string, as per 'getbufvar()'.
+"				* if a:typid_or_validexpr is a number ('type()' return value):
+"					the empty value as per the typeid (0 for number, '' for strings,
+"					etc.);
+"				* if a:typid_or_validexpr is an expression: this function raises an
+"					exception if it could not retrieve that variable;
+" prev: fu! ctrlp#utils#getbufvar(bufexp, varname, typid_or_validexpr, ...) abort
+" prev: 	let except_pref = 'ctrlp#utils#getbufvar():'
+" prev:
+" prev: 	for stage_id in range(2)
+" prev: 		unl! val_auto
+" prev: 		" prev: let val_auto = (stage_id == 0)
+" prev: 		" prev: 	\	?	getbufvar(a:bufexp, a:varname)
+" prev: 		" prev: 	\	: ctrlp#utils#eval_expr_in_buffer(a:bufexp, 'b:' . a:varname)
+" prev: 		" prev: " validate, in order to detect invalid/absent values.
+" prev: 		" prev: if type(a:typid_or_validexpr) == s:typeid_num
+" prev: 		" prev: 	let sucflag = (type(val_auto) == a:typid_or_validexpr)
+" prev: 		" prev: el
+" prev: 		" prev: 	try
+" prev: 		" prev: 		" prev: sandbox let sucflag = eval(a:typid_or_validexpr)
+" prev: 		" prev: 		sandbox let sucflag = !empty(filter([val_auto], a:typid_or_validexpr))
+" prev: 		" prev: 	cat
+" prev: 		" prev: 		let sucflag = 0
+" prev: 		" prev: 	endt
+" prev: 		" prev: en
+" prev: 		try
+" prev: 			let val_auto = (stage_id == 0)
+" prev: 				\	?	getbufvar(a:bufexp, a:varname)
+" prev: 				\	: ctrlp#utils#eval_expr_in_buffer(a:bufexp, 'b:' . a:varname)
+" prev: 			" validate, in order to detect invalid/absent values.
+" prev: 			if type(a:typid_or_validexpr) == s:typeid_num
+" prev: 				let sucflag = (type(val_auto) == a:typid_or_validexpr)
+" prev: 			el
+" prev: 				" prev: sandbox let sucflag = eval(a:typid_or_validexpr)
+" prev: 				sandbox let sucflag = !empty(filter([val_auto], a:typid_or_validexpr))
+" prev: 			en
+" prev:
+" prev: 		cat
+" prev: 			let sucflag = 0
+" prev: 		endt
+" prev:
+" prev: 		if sucflag | brea | en
+" prev: 	endfo
+" prev:
+" prev: 	if !sucflag
+" prev: 		" prev: if (!a:0) && (type(a:typid_or_validexpr) == s:typeid_num)
+" prev: 		" prev: 	retu ctrlp#utils#getemptyval_bytypeid(a:typid_or_validexpr)
+" prev: 		" prev: elsei a:0
+" prev: 		" prev: 	retu a:1
+" prev: 		if a:0
+" prev: 			retu a:1
+" prev: 		elsei (type(a:typid_or_validexpr) == s:typeid_num)
+" prev: 			retu ctrlp#utils#getemptyval_bytypeid(a:typid_or_validexpr)
+" prev: 		el
+" prev: 			throw except_pref . ' invalid/non-existing value and no default provided'
+" prev: 		en
+" prev: 	en
+" prev:
+" prev: 	" the value retrieved originally passed the checking criteria: return it.
+" prev: 	retu val_auto
+" prev: endf
+" TEST: unlet! t_vn1 t_s1 t_t1 | let t_vn1='changedtick' | let t_t1='!empty(v:val)' | silent let t_s1 = call('ctrlp#utils#getbufvar', ['#', t_vn1] + (exists('t_t1') ? [t_t1] : []) ) | redraw! | echomsg printf('%s: %s; validator/typeid: %s;', t_vn1, string(t_s1), exists('t_t1') ? string(t_t1) : '<unspecified>') | unlet! t_vn1 t_s1 t_t1
+" TEST: unlet! t_vn1 t_s1 t_t1 t_dv1 | let t_vn1='somevar' | let t_t1='' | let t_dv1='my_def' | if exists('t_dv1') && !exists('t_t1') | let t_t1='' | en | silent let t_s1 = call('ctrlp#utils#getbufvar', ['#', t_vn1] + (exists('t_t1') ? [t_t1] + (exists('t_dv1') ? [t_dv1] : []) : []) ) | redraw! | echomsg printf('%s: %s; validator/typeid: %s;', t_vn1, string(t_s1), exists('t_t1') ? string(t_t1) : '<unspecified>') | unlet! t_vn1 t_s1 t_t1 t_dv1
+fu! ctrlp#utils#getbufvar(bufexp, varname, ...) abort
+	let log_pref = 'ctrlp#utils#getbufvar():'
+	let except_pref = log_pref
+
+	let typid_or_validexpr = (a:0 > 0)
+		\	? a:1
+		\	: get(s:getbufvar_knowntypeidvalidexpr_dict, a:varname, '')
+	let validation_is_typeid = type(typid_or_validexpr) == s:typeid_num
+	"? let [bufnr_var, bufnr_cur] = [bufnr(a:bufexp), bufnr('%')]
+	let bufnr_dst = bufnr(a:bufexp)
+	cal ctrlp#ev_log_printf(
+		\ '%s entered. a:bufexp=%s; a:varname=%s; a:000=%s; ' .
+		\		'bufnr_calculated=%d;',
+		\	log_pref, string(a:bufexp), string(a:varname), string(a:000), bufnr_dst)
+
+	" MAYBE: put this inside a function: ctrlp#utils#bufexp_mightbevalid(bufexp)
+	let sucflag = (bufnr_dst > 0) && (bufnr_dst <= bufnr('$'))
+	if sucflag
+		let in_var_buf = bufnr_dst == bufnr('%')
+		let varname_as_expr = 'b:' . a:varname
+		for use_getbufvar in [1, 0]
+			unl! val_any
+			try
+				let sucflag = 0
+				if in_var_buf && !exists(varname_as_expr)
+					" we know that we will need to return a default value, if one can be
+					" worked out, so there is no point in going through the "get buffer
+					" variable" calls.
+					brea
+				en
+				let val_any = use_getbufvar
+					\	?	getbufvar(a:bufexp, a:varname)
+					\	: ctrlp#utils#eval_expr_in_buffer(
+					\			a:bufexp,
+					\			in_var_buf
+					\				?	varname_as_expr
+					\				:	printf(
+					\						'exists(%s) ? %s : s:internal_obj_ref',
+					\						string(varname_as_expr), varname_as_expr)
+					\		)
+				" detect an inexisting buffer variable: work out the default value to
+				" be returned (outside this 'for' loop).
+				if val_any is s:internal_obj_ref | brea | en
+				" validate, in order to detect invalid/absent values.
+				if validation_is_typeid
+					let sucflag = (type(val_any) == typid_or_validexpr)
+				" a:typid_or_validexpr unspecified: return whatever was returned by the
+				" "get buffer variable" function.
+				elsei a:0 == 0
+					let sucflag = !0
+				" if the caller has specified no validation expression (but no typeid,
+				" either), then we can't trust the potentially broken vim
+				" 'getbufvar()' function.
+				elsei empty(typid_or_validexpr)
+					let sucflag = !use_getbufvar
+				el
+					sandbox let sucflag = !empty(filter([val_any], typid_or_validexpr))
+				en
+
+			cat
+				cal ctrlp#ev_log_printf(
+					\ '%s caught exception when attempting to retrieve the bufvar. ' .
+					\		'use_getbufvar=%d; ' .
+					\		'exception=%s; throwpoint=%s;',
+					\	log_pref, use_getbufvar, string(v:exception), string(v:throwpoint))
+				let sucflag = 0
+			endt
+
+			if sucflag | brea | en
+		endfo
+		if sucflag
+			cal ctrlp#ev_log_printf(
+				\ '%s about to return retrieved value. retval=%s;',
+				\	log_pref, string(val_any))
+			" the value retrieved originally passed the checking criteria: return it.
+			retu val_any
+		en
+	en
+
+	" return default/throw exception
+	if a:0 > 1
+		cal ctrlp#ev_log_printf(
+			\ '%s about to return caller-specified default value. retval=%s;' .
+			\	log_pref, string(a:2))
+		retu a:2
+	elsei a:0 == 0
+		cal ctrlp#ev_log_printf(
+			\ '%s about to return standard "var not found" value. retval=%s;',
+			\	log_pref, string(''))
+		retu ''
+	elsei validation_is_typeid
+		cal ctrlp#ev_log_printf(
+			\ '%s about to default for caller-specified data type. typeid=%d;' .
+			\	log_pref, typid_or_validexpr)
+		retu ctrlp#utils#getemptyval_bytypeid(typid_or_validexpr)
+	el
+		" prev: throw except_pref . ' invalid/non-existing value and no default provided'
+		let exception_obj = except_pref . ' invalid/non-existing value and no default provided'
+		cal ctrlp#ev_log_printf(
+			\ '%s about to raise exception. exception=%s;' .
+			\	log_pref, string(exception_obj))
+		throw exception_obj
+	en
+endf
+
+" window/cursor state save/restore {{{1
+if exists('*getcurpos')
+	fu! ctrlp#utils#getcurpos()
+		return getcurpos()
+	endf
+el
+	fu! ctrlp#utils#getcurpos()
+		return getpos('.')
+	endf
+en
+
+fu! ctrlp#utils#getwincursorstate()
+	let cursor_pos = ctrlp#utils#getcurpos()
+	let wincurstate = {
+				\ 'cursor_pos': cursor_pos,
+				\ }
+
+	sil keepj normal! H0
+	let wincurstate.win_h_pos = ctrlp#utils#getcurpos()
+
+	cal setpos('.', cursor_pos)
+
+	return wincurstate
+endf
+
+fu! ctrlp#utils#setwincursorstate(wincurstate)
+	cal setpos('.', a:wincurstate.win_h_pos)
+	sil! normal! zt
+	cal setpos('.', a:wincurstate.cursor_pos)
+endf
+
 " Files and Directories {{{1
 fu! ctrlp#utils#cachedir()
 	retu s:cache_dir

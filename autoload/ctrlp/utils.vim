@@ -9,9 +9,22 @@ fu! ctrlp#utils#lash()
 	retu &ssl || !exists('+ssl') ? '/' : '\'
 endf
 
+fu! ctrlp#utils#lash_for(...)
+	retu ( a:0 ? a:1 : getcwd() ) !~ '[\/]$' ? s:lash : ''
+endf
+
+if 1
+fu! s:lash(...)
+	retu call('ctrlp#utils#lash_for', a:000)
+endf
+elsei 1
+" there is a variable with this name already:
+"- let s:lash = function('ctrlp#utils#lash_for')
+el
 fu! s:lash(...)
 	retu ( a:0 ? a:1 : getcwd() ) !~ '[\/]$' ? s:lash : ''
 endf
+en
 
 fu! ctrlp#utils#opts()
 	let s:lash = ctrlp#utils#lash()
@@ -32,6 +45,28 @@ cal ctrlp#utils#opts()
 let s:wig_cond = v:version > 702 || ( v:version == 702 && has('patch051') )
 
 " Vim feature/command/function support {{{1
+if exists('*abs')
+	fu! ctrlp#utils#abs(expr) abort
+		retu abs(a:expr)
+	endf
+el
+	" behave as much as 'abs()' as possible
+	fu! ctrlp#utils#abs(expr) abort
+		let expr_type = type(a:expr)
+		if expr_type != 0
+			echoe printf(
+				\	'ctrlp#utils#abs(): parameter type not supported. ' .
+				\		'a:expr=%s; type(a:expr)=%d;',
+				\	string(a:expr), expr_type)
+			retu -1
+		en
+		if a:expr < 0
+			retu -(a:expr)
+		en
+		retu a:expr
+	endf
+en
+
 "? let s:expr_supported_dict = {}
 
 " table with "fixes" for broken detections
@@ -93,6 +128,111 @@ fu! ctrlp#utils#make_cmdstr_supported(cmd_list) abort
 endf
 
 " Buffers and variables {{{1
+
+let s:setoptaddremove_opadd_useelem_filterexpr =
+	\	'stridx(opt_val_onentry, v:val) < 0'
+let s:setoptaddremove_oprem_useelem_filterexpr =
+	\	'stridx(opt_val_onentry, v:val) >= 0'
+
+let s:setoptaddremove_opadd_opdict_val =
+	\	[ '+=', s:setoptaddremove_opadd_useelem_filterexpr ]
+let s:setoptaddremove_oprem_opdict_val =
+	\	[ '-=', s:setoptaddremove_oprem_useelem_filterexpr ]
+
+let s:setoptaddremove_op_dict = {
+	\		'+=': s:setoptaddremove_opadd_opdict_val,
+	\		'-=': s:setoptaddremove_oprem_opdict_val,
+	\	}
+
+" prev: " returns:
+" prev: "		[changed_value, prev_opt_value]
+" prev: fu! ctrlp#utils#set_option_add_flags_cond(opt, flags_str_or_list)
+" prev: 	let opt_var = '%' . a:opt
+" prev: 	let opt_val_onentry = eval(opt_var)
+" prev: 	let flags_list = (type(a:flags_str_or_list) == s:typeid_list)
+" prev: 		\	? copy(a:flags_str_or_list)
+" prev: 		\	:	split(a:flags_str_or_list, '\zs')
+" prev: 	" leave only the flags that were not found in the original option value.
+" prev: 	cal filter(flags_list, '(!empty(v:val)) && stridx(opt_var, v:val) < 0')
+" prev: 	if empty(flags_list) | retu [0, opt_val_onentry] | en
+" prev:
+" prev: 	for flag_now in flags_list
+" prev: 		try
+" prev: 			exe 'set ' . a:opt . '+=' . flag_now
+" prev: 		cat
+" prev: 			" unsupported value
+" prev: 			" MAYBE: log?
+" prev: 		endt
+" prev: 	endfo
+" prev: 	retu [(eval(opt_var) != opt_val_onentry), opt_val_onentry]
+" prev: endf
+
+" returns:
+"		[changed_value, prev_opt_value]
+fu! ctrlp#utils#set_option_addremove_flags_cond(opt, op, flags_str_or_list)
+	let log_pref = 'ctrlp#utils#set_option_addremove_flags_cond():'
+	let opt_var = '&' . a:opt
+	let opt_val_onentry = eval(opt_var)
+	let op_entry = s:setoptaddremove_op_dict[a:op]
+	let filter_expr = join(
+		\	map(
+		\		filter(['!empty(v:val)', op_entry[1]], '!empty(v:val)'),
+		\		'"(" . v:val . ")"'),
+		\	' && ')
+
+	let flags_list = (type(a:flags_str_or_list) == s:typeid_list)
+		\	? copy(a:flags_str_or_list)
+		\	:	split(a:flags_str_or_list, '\zs')
+	" leave only the flags that were not found in the original option value.
+	if !empty(filter_expr) | cal filter(flags_list, filter_expr) | en
+
+	cal ctrlp#ev_log_printf(
+		\	'%s processing. a:opt=%s; a:op=%s; a:flags_str_or_list=%s; ' .
+		\		'opt_var=%s; opt_val_onentry=%s; op_entry=%s; ' .
+		\		'filter_expr=%s; flags_list=%s;',
+		\	log_pref, string(a:opt), string(a:op), string(a:flags_str_or_list),
+		\	string(opt_var), string(opt_val_onentry), string(op_entry),
+		\	string(filter_expr), string(flags_list))
+
+	if empty(flags_list) | retu [0, opt_val_onentry] | en
+
+	for flag_now in flags_list
+		try
+			exe 'set ' . a:opt . op_entry[0] . flag_now
+		cat
+			" unsupported value
+			" MAYBE: log?
+		endt
+	endfo
+	retu [(eval(opt_var) != opt_val_onentry), opt_val_onentry]
+endf
+
+"		* opers_flags_list: list of elements of fixed size:
+"			each element is made of the parameters to call
+"			'ctrlp#utils#set_option_addremove_flags_cond()' with, except the first
+"			one, which is 'a:opt', so it's currently:
+"			[ op, flags_str_or_list ]
+fu! ctrlp#utils#set_option_addremove_flags_opers(opt, opers_flags_list)
+	let opt_var = '&' . a:opt
+	let opt_val_onentry = eval(opt_var)
+
+	for oper_flags_item in a:opers_flags_list
+		cal call(
+			\	'ctrlp#utils#set_option_addremove_flags_cond',
+			\	[a:opt] + oper_flags_item)
+	endfo
+
+	retu [(eval(opt_var) != opt_val_onentry), opt_val_onentry]
+endf
+
+fu! ctrlp#utils#set_opt_shortmess_nomessages()
+	retu ctrlp#utils#set_option_addremove_flags_opers(
+		\	'shortmess',
+		\	[
+		\		[ '+=', 'atToOsWAF' ],
+		\	])
+endf
+
 " FIXME: remove once complete
 " NOTE: switching to another and back does reload that buffer if there were no
 " other windows with that buffer open, so (for example) local overrides to
@@ -102,6 +242,80 @@ endf
 " global value and losing the local override).
 let s:eval_expr_in_buffer_use_tabs = !0
 
+fu! ctrlp#utils#execute_in_buffer(bufexp, cmd) abort
+	let cur_bufnr = bufnr('%')
+	let sav_lazyredraw = &lazyredraw
+	let opts_ui_set = 0
+	let cmd_screencommon_prepare =
+		\	'if !opts_ui_set | ' .
+		\	' if !&lazyredraw | ' .
+		\	'  set lazyredraw | ' .
+		\	' en | ' .
+		\ ' unl! t_shortmess_rv | ' .
+		\	' let t_shortmess_rv = ctrlp#utils#set_opt_shortmess_nomessages() | ' .
+		\	' if t_shortmess_rv[0] | let sav_shortmess = t_shortmess_rv[1] | en | ' .
+		\ ' unl! t_shortmess_rv | ' .
+		\	' let opts_ui_set=1 | ' .
+		\	'en'
+	let cmd_screencommon_pref = cmd_screencommon_prepare . ' | '
+	if s:eval_expr_in_buffer_use_tabs
+		let cmd_tabpagecommon_pref = cmd_screencommon_pref .
+			\	ctrlp#utils#make_cmdstr_supported([
+			\		'silent', 'keepalt', 'keepjumps', 'noautocmd'])
+	el
+		let cmd_gotobuf_pref = cmd_screencommon_pref .
+			\	ctrlp#utils#make_cmdstr_supported([
+			\		'silent', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
+	en
+	try
+		let dst_bufnr = bufnr(a:bufexp)
+		" prev: if dst_bufnr != sav_bufnr
+		if dst_bufnr != cur_bufnr
+			exe cmd_screencommon_prepare
+			if s:eval_expr_in_buffer_use_tabs
+				let sav_tabpage = tabpagenr()
+				exe cmd_tabpagecommon_pref tabpagenr('$') . 'tab sbuffer' dst_bufnr
+			el
+				let sav_wincurstate = ctrlp#utils#getwincursorstate()
+				let sav_bufnr = cur_bufnr
+				" prev: set lazyredraw
+				exe cmd_gotobuf_pref 'b' dst_bufnr
+			en
+		en
+		" MAYBE: save and restore cursor position (including relative position
+		" with respect to the window top, etc.).
+		" NOTE: for now, this expression is evaluated inside the ':h sandbox'.
+		exe a:cmd
+		retu !0
+
+	fina
+		if exists('sav_tabpage') && (sav_tabpage != tabpagenr())
+			" MAYBE: validate that the buffer is the correct one, and/or there is
+			" only one window in this tab, etc.
+			exe cmd_tabpagecommon_pref 'hide tabclose'
+			exe cmd_tabpagecommon_pref 'normal!' sav_tabpage . 'gt'
+		en
+		if exists('sav_bufnr') && (sav_bufnr != bufnr('%'))
+			if s:eval_expr_in_buffer_use_tabs
+				" TODO: raise exception: this should not happen
+			el
+				exe cmd_gotobuf_pref 'b' sav_bufnr
+			en
+		en
+		if exists('sav_wincurstate')
+			exe cmd_screencommon_prepare
+			cal ctrlp#utils#setwincursorstate(sav_wincurstate)
+		en
+		" prev: if &shortmess != sav_shortmess
+		if exists('sav_shortmess')
+			let &shortmess = sav_shortmess
+		en
+		if &lazyredraw != sav_lazyredraw
+			let &lazyredraw = sav_lazyredraw
+		en
+	endt
+endf
+
 	"   done: create a function to evaluate an expression in a buffer, returning
 	"   to the previous one.
 	"   IDEA: then have ctrlp#utils#getbufvar(bufexp, varname,
@@ -110,27 +324,36 @@ let s:eval_expr_in_buffer_use_tabs = !0
 	"   IDEA: then have ctrlp#utils#getbufchangedtick() call
 	"   ctrlp#utils#getbufvar().
 fu! ctrlp#utils#eval_expr_in_buffer(bufexp, expr) abort
+	if 1	" FIXME: remove conditional
+		retu ctrlp#utils#execute_in_buffer(
+			\	a:bufexp,
+			\	printf('sandbox retu eval(%s)', string(a:expr)))
+	el " FIXME: remove conditional
 	" prev: let sav_bufnr = bufnr('%')
 	let cur_bufnr = bufnr('%')
 	let sav_lazyredraw = &lazyredraw
-	let sav_shortmess = &shortmess
+	" prev: let sav_shortmess = &shortmess
 	let opts_ui_set = 0
 	"+ \	'silent', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
 	"+? \	'silent!', 'keepalt', 'keepjumps', 'noautocmd', 'hide'])
 	" TODO: put the body of the option-changing inside a function, and call
 	" that instead of having the full body as inline code.
+	" prev: \ ' unl! t_s | ' .
+	" prev: \	' for t_s in filter( ' .
+	" prev: \	'   ["a", "t", "T", "o", "O", "s", "W", "A", "F"], ' .
+	" prev: \	'   "stridx(&shortmess, v:val) < 0") | ' .
+	" prev: \	'  try | exe "set shortmess+=" . t_s | cat | endt | ' .
+	" prev: \	' endfo | ' .
+	" prev: \ ' unl! t_s | ' .
 	let cmd_screencommon_prepare =
 		\	'if !opts_ui_set | ' .
 		\	' if !&lazyredraw | ' .
 		\	'  set lazyredraw | ' .
 		\	' en | ' .
-		\ ' unl! t_s | ' .
-		\	' for t_s in filter( ' .
-		\	'   ["a", "t", "T", "o", "O", "s", "W", "A", "F"], ' .
-		\	'   "stridx(&shortmess, v:val) < 0") | ' .
-		\	'  try | exe "set shortmess+=" . t_s | cat | endt | ' .
-		\	' endfo | ' .
-		\ ' unl! t_s | ' .
+		\ ' unl! t_shortmess_rv | ' .
+		\	' let t_shortmess_rv = ctrlp#utils#set_opt_shortmess_nomessages() | ' .
+		\	' if t_shortmess_rv[0] | let sav_shortmess = t_shortmess_rv[1] | en | ' .
+		\ ' unl! t_shortmess_rv | ' .
 		\	' let opts_ui_set=1 | ' .
 		\	'en'
 	let cmd_screencommon_pref = cmd_screencommon_prepare . ' | '
@@ -183,13 +406,15 @@ fu! ctrlp#utils#eval_expr_in_buffer(bufexp, expr) abort
 			exe cmd_screencommon_prepare
 			cal ctrlp#utils#setwincursorstate(sav_wincurstate)
 		en
-		if &shortmess != sav_shortmess
+		" prev: if &shortmess != sav_shortmess
+		if exists('sav_shortmess')
 			let &shortmess = sav_shortmess
 		en
 		if &lazyredraw != sav_lazyredraw
 			let &lazyredraw = sav_lazyredraw
 		en
 	endt
+	en " FIXME: remove conditional
 endf
 
 let s:typeid_num = type(0)
@@ -319,7 +544,11 @@ fu! ctrlp#utils#getbufvar(bufexp, varname, ...) abort
 	let sucflag = (bufnr_dst > 0) && (bufnr_dst <= bufnr('$'))
 	if sucflag
 		let in_var_buf = bufnr_dst == bufnr('%')
-		let varname_as_expr = 'b:' . a:varname
+		" handle "variable" names with prefixes: '&', '&l:': use the provided
+		" a:varname as it is.
+		" prev: let varname_as_expr = 'b:' . a:varname
+		let varname_as_expr =
+			\	( (a:varname =~# '\v^\&%(l:)?') ?	'' : 'b:' ) . a:varname
 		for use_getbufvar in [1, 0]
 			unl! val_any
 			try
@@ -405,18 +634,158 @@ fu! ctrlp#utils#getbufvar(bufexp, varname, ...) abort
 	en
 endf
 
+fu! s:restore_vals_helper()
+	let except_pref = 's:restore_vals_helper():'
+	if !exists('s:restore_vals_last_restoreinfo_list')
+		th printf('%s required pre-condition has not been met', except_pref)
+	en
+	let num_restored = 0
+	for [restoreinfo_var, restoreinfo_val] in s:restore_vals_last_restoreinfo_list
+		try
+			" prev: if exists(restoreinfo_var) && (eval(restoreinfo_var) !=# restoreinfo_val)
+			if exists(restoreinfo_var)
+				unl! restoreinfo_val_prev
+				let restoreinfo_val_prev = eval(restoreinfo_var)
+				if restoreinfo_val_prev ==# restoreinfo_val | con | en
+				" prev: if restoreinfo_val_prev !=# restoreinfo_val
+					if type(restoreinfo_val_prev) != type(restoreinfo_val)
+						unl {restoreinfo_var}
+					en
+				" prev: en
+			en
+			let {restoreinfo_var} = restoreinfo_val
+			let num_restored += 1
+
+		"? cat
+		"? 	" TODO: save first exception, count exceptions
+		endt
+	endfo
+	" TODO: re-throw the first exception, report counter (TODO: there's an
+	" example of this in some ctrlp module (mine))
+	
+	retu num_restored
+endf
+
+fu! s:detect_getbufvar_support() abort
+	if exists('s:getbufvar_supports_def') | retu s:getbufvar_supports_def | en
+	let bufexpr = bufnr('%')
+	if bufexpr > 0
+		for varname in ['nonexisting_variable_1234567890']
+			if exists('b:' . varname) | con | en
+			try
+				" NOTE: this function signature is not available on vim-7.0, so we
+				" will attempt to detect its support here.
+				let getbufvar_supports_def = getbufvar(
+					\	bufexpr, varname, s:internal_obj_ref) is s:internal_obj_ref
+			cat
+				let getbufvar_supports_def = 0
+			endt
+			let s:getbufvar_supports_def = getbufvar_supports_def
+			"+? retu s:getbufvar_supports_def
+		endfo
+		" if none of our varname values was good for feature detection, we will
+		" fallback to the most compatible case.
+	en
+	" prev: " prev: let getbufvar_supports_def = 0
+	" prev: let s:getbufvar_supports_def = 0
+	if !exists('s:getbufvar_supports_def')
+		let s:getbufvar_supports_def = 0
+	en
+	retu s:getbufvar_supports_def
+endf
+
+fu! ctrlp#utils#restore_vals_in_buf(bufexpr, restoreinfo_list)
+	if empty(a:restoreinfo_list) | retu 0 | en
+
+	let bufnr = bufnr(a:bufexpr)
+	" prev: let filter_expr_varprocremote =
+	" prev: 	\	'v:val[0] =~# ''\v^\&%([lg]:)?[a-z][[:alnum:]_]*$'''
+	" MAYBE: use: 'if s:getbufvar_supports_def', and
+	"  do a 'cal s:detect_getbufvar_support()' above.
+	if s:detect_getbufvar_support()
+		let opts_remote_list = a:restoreinfo_list
+		let opts_inbuf_list = []
+	el
+		let filter_expr_varprocremote =
+			\	'v:val[0] =~# ''\v^\&%([lg]:)?[a-z][[:alnum:]_]*$'''
+		" split the input list into two groups:
+		" vim options can be read and written to using 'getbufvar()' and
+		" 'setbufvar()', respectively.
+		let opts_remote_list = filter(
+			\	copy(a:restoreinfo_list),
+			\	filter_expr_varprocremote)
+		let opts_inbuf_list = filter(
+			\	copy(a:restoreinfo_list),
+			\	printf('!(%s)', filter_expr_varprocremote))
+	en
+
+	let num_restored = 0
+
+	if !empty(opts_remote_list)
+		" use getbufvar(), setbufvar()
+		for [restoreinfo_var, restoreinfo_val] in opts_remote_list
+			try
+				" prev: let varname_mangled = substitute(
+				" prev: 	\	restoreinfo_var, '\v^\&\zs%([[:alpha:]]:)', '', '')
+				let varname_mangled = substitute(
+					\	restoreinfo_var, '\v^%(\&)?\zs%([[:alpha:]]:)', '', '')
+				" TODO: also deal with different types (':unlet', etc.)
+				if s:getbufvar_supports_def
+					unl! varval
+					let varval = getbufvar(bufnr, varname_mangled, s:internal_obj_ref)
+					let procflag = (varval is s:internal_obj_ref)
+						\	|| (varval !=# restoreinfo_val)
+					unl varval
+				el
+					let procflag = getbufvar(bufnr, varname_mangled) !=# restoreinfo_val
+				en
+				" prev: if getbufvar(bufnr, restoreinfo_var) !=# restoreinfo_val
+				if procflag
+					cal setbufvar(bufnr, varname_mangled, restoreinfo_val)
+					let num_restored += 1
+				en
+
+			"? cat
+			"? 	" TODO: save first exception, count exceptions
+			endt
+		endfo
+		" TODO: re-throw the first exception, report counter (TODO: there's an
+		" example of this in some ctrlp module (mine))
+	en
+
+	if !empty(opts_inbuf_list)
+		try
+			" no need to copy, as this is a read-only list for us.
+			let s:restore_vals_last_restoreinfo_list = opts_inbuf_list
+			let num_restored += ctrlp#utils#execute_in_buffer(
+				\	bufnr, 'retu s:restore_vals_helper()')
+		fina
+			unl! s:restore_vals_last_restoreinfo_list
+		endt
+	en
+
+	retu num_restored
+endf
+
+" regex support {{{1
+
+fu! ctrlp#utils#regex_literal2regex_nomagic(str)
+	retu escape(a:str, '^$\')
+endf
+
 " window/cursor state save/restore {{{1
 if exists('*getcurpos')
-	fu! ctrlp#utils#getcurpos()
+	fu! ctrlp#utils#getcurpos() abort
 		return getcurpos()
 	endf
 el
-	fu! ctrlp#utils#getcurpos()
+	fu! ctrlp#utils#getcurpos() abort
 		return getpos('.')
 	endf
 en
 
-fu! ctrlp#utils#getwincursorstate()
+" TODO: use winsaveview(), winrestview() inside/instead these functions.
+fu! ctrlp#utils#getwincursorstate() abort
 	let cursor_pos = ctrlp#utils#getcurpos()
 	let wincurstate = {
 				\ 'cursor_pos': cursor_pos,
@@ -430,10 +799,162 @@ fu! ctrlp#utils#getwincursorstate()
 	return wincurstate
 endf
 
-fu! ctrlp#utils#setwincursorstate(wincurstate)
+fu! ctrlp#utils#setwincursorstate(wincurstate) abort
 	cal setpos('.', a:wincurstate.win_h_pos)
 	sil! normal! zt
 	cal setpos('.', a:wincurstate.cursor_pos)
+endf
+
+" optional args:
+"		* tabpageexpr:
+"			* if ommitted or 0, it retrieves the current tabpagenr().
+"			* '$': get the last tabpage (tabpagenr('$')).
+"			* if it's a valid tabpagenr() (number), return that value.
+"			* NOTE: exceptions are thrown for unsupported/invalid values.
+fu! ctrlp#utils#gettabpagenr(...) abort
+	" prev: let tabpagenr_args =
+	" prev: 	\	(!a:0) || ( (type(a:1) == s:typeid_num) && (a:1 == 0) )
+	" prev: 	\	?	[] : [a:1]
+	" prev: retu call('tabpagenr', tabpagenr_args)
+	if a:0
+		if type(a:1) == s:typeid_num
+			if a:1 == 0
+				" prev: retu tabpagenr()
+				" fall through
+			elsei (a:1 >= 1) && (a:1 <= tabpagenr('$'))
+				retu a:1
+			el
+				throw printf('%s invalid tabpagenr=%s', except_pref, string(a:1))
+			en
+			" fall through
+		el
+			" let this function return an error for invalid expressions.
+			retu tabpagenr(a:1)
+		en
+		" prev: throw printf('%s invalid tabpagenr=%s', except_pref, string(a:1))
+		" fall through
+	en
+	retu tabpagenr()
+endf
+
+let s:gettablayoutinfo_switchtab_cmd_pref = ctrlp#utils#make_cmdstr_supported([
+	\		'noautocmd', 'keepjumps',
+	\	])
+
+" TODO: continue...: fu! ctrlp#utils#gettabwin... (position in the editor's complete layout -- including bufnr?)
+" TODO: document the dictionary elements that are guaranteed to be stable.
+" optional args:
+"		* tabpageexpr: see ctrlp#utils#gettabpagenr()
+fu! ctrlp#utils#gettablayoutsnapshot(...) abort
+	" pass the first optional argument (if there is one) to the invoked function
+	let info_tabpagenr = call('ctrlp#utils#gettabpagenr', a:000[:0])
+
+	let cur_tabpagenr = tabpagenr()
+	let winnr_focused = tabpagewinnr(info_tabpagenr)
+	let buflist = tabpagebuflist(info_tabpagenr)
+
+	let tablayout_dict = {
+		\		'tabpagenr': info_tabpagenr,
+		\		'winnr_cnt': tabpagewinnr(info_tabpagenr, '$'),
+		\		'winnr_focused': winnr_focused,
+		\		'bufnr_all': buflist,
+		\		'bufnr_focused': buflist[winnr_focused - 1],
+		\		'lines_term': &lines,
+		\	}
+
+	try
+		if cur_tabpagenr != info_tabpagenr
+			exe s:gettablayoutinfo_switchtab_cmd_pref 'normal!' info_tabpagenr . 'gt'
+		en
+		let tablayout_dict['winview_focused'] = winsaveview()
+		let tablayout_dict['winrestcmd'] = winrestcmd()
+	fina
+		if cur_tabpagenr != tabpagenr()
+			exe s:gettablayoutinfo_switchtab_cmd_pref 'normal!' cur_tabpagenr . 'gt'
+		en
+	endt
+
+	retu tablayout_dict
+endf
+
+let s:tablayoutsnapshot_comp_part_nonactivebufs = [
+	\		'bufnr_all',
+	\	]
+let s:tablayoutsnapshot_comp_part_cursorstate = [
+	\		'winview_focused',
+	\	]
+let s:tablayoutsnapshot_comp_part_tabwinsizes = [
+	\		'winrestcmd',
+	\		'lines_term',
+	\	]
+
+let s:tablayoutsnapshot_comp_presets = {
+	\		'tablysnapcomp_samewinfocused': [
+	\				'bufnr_focused',
+	\			]
+	\			+ s:tablayoutsnapshot_comp_part_cursorstate
+	\			+ s:tablayoutsnapshot_comp_part_nonactivebufs
+	\			+ s:tablayoutsnapshot_comp_part_tabwinsizes
+	\			,
+	\		'tablysnapcomp_samewincnt': [
+	\				'bufnr_focused',
+	\				'winnr_focused',
+	\			]
+	\			+ s:tablayoutsnapshot_comp_part_cursorstate
+	\			+ s:tablayoutsnapshot_comp_part_nonactivebufs
+	\			+ s:tablayoutsnapshot_comp_part_tabwinsizes
+	\			,
+	\	}
+
+" optional args:
+"		* kwargs (dictionary):
+"			* 'tabpageexpr': see ctrlp#utils#gettabpagenr();
+"			* 'tablayoutsnapshot_new': if not specified, gets it by calling
+"				'ctrlp#utils#gettablayoutsnapshot(kwargs['tabpageexpr'])';
+"			* 'ignored_fields': fields that are not used in the comparison;
+fu! ctrlp#utils#istablayoutsnapshotsame(tablayoutsnapshot_prev, ...) abort
+	let except_pref = 'ctrlp#utils#istablayoutsnapshotsame():'
+	let kwargs = a:0 ? a:1 : {}
+	let tablayout_prev = copy(a:tablayoutsnapshot_prev)
+	let tablayout_new = has_key(kwargs, 'tablayoutsnapshot_new')
+		\	? deepcopy(kwargs['tablayoutsnapshot_new'])
+		\	: ctrlp#utils#gettablayoutsnapshot(get(kwargs, 'tabpageexpr', 0))
+	" support keywords in 'ignored_fields', so that we can populate the list
+	" using a number of presets whose actual definitions are hidden from the
+	" caller.
+	let ignored_fields_any = get(kwargs, 'ignored_fields', s:internal_obj_ref)
+	if ignored_fields_any is s:internal_obj_ref
+		let ignored_fields_list = []
+	el
+		let ignored_fields_any_type = type(ignored_fields_any)
+		if ignored_fields_any_type == s:typeid_str
+			" let this function throw an exception if the key is not found in the
+			" dictionary.
+			let ignored_fields_list =
+				\	s:tablayoutsnapshot_comp_presets[ignored_fields_any]
+		elsei ignored_fields_any_type == s:typeid_list
+			let ignored_fields_list = ignored_fields_any
+		else
+			throw printf(
+				\	'%s unsupported value type in kwargs[%s]: type=%d; value=%s;',
+				\	except_pref, 'ignored_fields',
+				\	ignored_fields_any_type, string(ignored_fields_any))
+		en
+	en
+	unl! ignored_fields_any ignored_fields_any_type
+
+	" filter 'tablayout_prev', 'tablayout_new' using 'ignored_fields_list'.
+	if !empty(ignored_fields_list)
+		for tablayout_obj in [tablayout_prev, tablayout_new]
+			cal filter(tablayout_obj, 'index(ignored_fields_list, v:key) < 0')
+		endfo
+	en
+
+	try
+		retu tablayout_prev == tablayout_new
+	cat
+		retu 0
+	endt
 endf
 
 " Files and Directories {{{1
@@ -497,6 +1018,42 @@ fu! ctrlp#utils#fname_is_virtual(fname) abort
 		en
 	endfo
 	retu 0
+endf
+
+let s:bufname_is_vim_notyetnamed_regex =
+	\	'\v[\/]?\[(\d+\*)?No Name\]$'
+
+let s:pathname_is_abs_path_regex =
+	\	(has('win32') || has('win64'))
+	\	?	'\v^([a-zA-Z]:){-}[/\\]'
+	\	: '\v^[/\\]'
+
+fu! ctrlp#utils#bufname_is_pathname(path) abort
+	retu (!empty(a:path))
+		\	&& (a:path !~# s:bufname_is_vim_notyetnamed_regex)
+		\	&& (!ctrlp#utils#fname_is_virtual(a:path))
+endf
+
+" optional args:
+"		* do_full_check (bool, default: false)
+fu! ctrlp#utils#pathname_is_abs(path, ...) abort
+	" prev: \	( (a:0 && a:1) ? (!ctrlp#utils#fname_is_virtual(a:path)) : !0 )
+	let retval =
+		\	( (!(a:0 && a:1)) || ctrlp#utils#bufname_is_pathname(a:path) )
+		\	&&
+		\	(a:path =~# s:pathname_is_abs_path_regex)
+	retu retval
+endf
+
+" optional args:
+"		* do_full_check (bool, default: false)
+fu! ctrlp#utils#pathname_is_rel(path, ...) abort
+	" prev: \	( (a:0 && a:1) ? (!ctrlp#utils#fname_is_virtual(a:path)) : !0 )
+	let retval =
+		\	( (!(a:0 && a:1)) || ctrlp#utils#bufname_is_pathname(a:path) )
+		\	&&
+		\	(a:path !~# s:pathname_is_abs_path_regex)
+	retu retval
 endf
 
 fu! ctrlp#utils#can_remove_directories() abort

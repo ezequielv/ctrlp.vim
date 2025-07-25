@@ -17,11 +17,17 @@ cal add(g:ctrlp_ext_vars, {
 	\ 'sname': 'tag',
 	\ 'enter': 'ctrlp#tag#enter()',
 	\ 'type': 'tabs',
+	\ 'opts': 'ctrlp#tag#opts()',
 	\ })
+
+let s:cfgvarname_pref = 'ctrlp_tag_'
+
+let [s:pref, s:opts] = ['g:' . s:cfgvarname_pref, {
+	\	'findtagcmd_verb': ['s:findtagcmd_verb_def', 'findtag_tagcmd'],
+	\ }]
 
 let s:id = g:ctrlp_builtins + len(g:ctrlp_ext_vars)
 
-let s:cfgvarname_pref = 'ctrlp_tag_'
 let s:cfgvarname_customtagfiles = s:cfgvarname_pref . 'custom_tag_files'
 "? let s:cfgvarname_stdtagfiles_index = s:cfgvarname_pref . 'stdtagfiles_index'
 
@@ -42,6 +48,13 @@ let s:get_tagfiles_proclist = [
 	\		[ 's:get_tagfiles_from_userexpr("g")', 's:has_tagfiles_data_from_userexpr("g")' ],
 	\		[ 'tagfiles()' ],
 	\ ]
+
+fu! ctrlp#tag#opts()
+	for [ke, va] in items(s:opts)
+		let {va[0]} = exists(s:pref.ke) ? {s:pref.ke} : va[1]
+	endfo
+endf
+
 " Utilities {{{1
 " return value:
 "  list of 4 elements:
@@ -180,6 +193,7 @@ fu! s:try_eval(expr, ...)
 endf
 
 fu! s:gettagfiles_on_userbuf() abort
+	let log_pref = 's:gettagfiles_on_userbuf():'
 	let skip_empty_lists = s:getcfg_skip_empty_lists()
 	" orig: let tfs = get(g:, 'ctrlp_custom_tag_files', tagfiles())
 	let tfs = []
@@ -207,14 +221,38 @@ fu! s:gettagfiles_on_userbuf() abort
 		let tfs = val_res
 		" TODO: remove from final commit
 		cal ctrlp#ev_log_printf(
-			\ 's:gettagfiles_on_userbuf(): val_expr=%s; cond_expr=%s; tfs=%s',
-			\	string(val_expr), string(cond_expr), string(tfs))
+			\ '%s val_expr=%s; cond_expr=%s; tfs=%s',
+			\	log_pref, string(val_expr), string(cond_expr), string(tfs))
 		brea
 	endfo
 
-	retu empty(tfs)
-		\ ? tfs
-		\ : filter(map(tfs, 'fnamemodify(v:val, ":p")'), 'filereadable(v:val)')
+	" prev: retu empty(tfs)
+	" prev: 	\ ? tfs
+	" prev: 	\ : filter(map(tfs, 'fnamemodify(v:val, ":p")'), 'filereadable(v:val)')
+	retu tfs
+endf
+
+fu! s:tagfiles_list_normalise(tagfiles_list) abort
+	" MAYBE: validate a:tagfiles_list: report errors/throw exceptions.
+	retu filter(
+		\	map(copy(a:tagfiles_list), 'fnamemodify(v:val, ":p")'),
+		\	'filereadable(v:val)')
+endf
+
+" prev: fu! s:tagentry_transform_localdir(tgdir_pref, tgentry_list)
+fu! s:tagentry_transform_localdir(tgdir_pref, tgentry_str)
+	" ref: 	\	'join(s:tagentry_transform_localdir(' .
+	" ref: 	\		'tgdir_pref, split(v:val, "\t", 1)), "\t")')
+	let tgentry_list = split(a:tgentry_str, "\t", 1)
+	let tgfname = tgentry_list[1]
+	" shortcut: if the file is something we don't deal with here, return the
+	" original value.
+	if !ctrlp#utils#pathname_is_rel(tgfname)
+		retu a:tgentry_str
+	en
+	let tgentry_list[1] = a:tgdir_pref . tgfname
+	retu join(tgentry_list, "\t")
+	" prev: retu a:tgentry_list
 endf
 
 fu! s:syntax()
@@ -226,6 +264,9 @@ endf
 " Public {{{1
 fu! ctrlp#tag#init()
 	let g:ctrlp_alltags = []
+	" TODO: make sure that each entry in s:tagfiles is an absolute path, so we
+	" will properly detect that a tagfile has been "seen" (inside the 'for'
+	" loop, below).
 	if empty(s:tagfiles) | retu [] | en
 
 	let [tagfiles, tagfiles_seen] = [[], {}]
@@ -235,6 +276,29 @@ fu! ctrlp#tag#init()
 		cal add(tagfiles, tagfile)
 
 		let alltags = s:filter(ctrlp#utils#readfile(tagfile))
+
+		" this can be safely prepended to relative paths for entries in 'tagfile'.
+		" NOTE: the filename for the chosen tag entry will be made into an
+		" absolute path before closing the CtrlP window, so the same working
+		" directory will be available at that point.
+		"+ let tgdir_pref = fnamemodify(tagfile, ':p:h')
+		let tgdir_pref = fnamemodify(tagfile, ':p:~:.:h')
+		if !empty(tgdir_pref)
+			let tgdir_pref .= ctrlp#utils#lash_for(tgdir_pref)
+		en
+
+		" FIXME: the filenames are passed on verbatim, so parsing the filename
+		" afterwards ends up being error-prone, as the current directory used to
+		" produce the 'tags' might not match the current working directory for the
+		" buffer used at the point of "jumping" to the tag definition.
+		" prev: cal map(
+		" prev: 	\	alltags,
+		" prev: 	\	'join(s:tagentry_transform_localdir(' .
+		" prev: 	\		'tgdir_pref, split(v:val, "\t", 1)), "\t")')
+		cal map(
+			\	alltags,
+			\	's:tagentry_transform_localdir(tgdir_pref, v:val)')
+
 		cal extend(g:ctrlp_alltags, alltags)
 	endfo
 	let s:tagfiles = tagfiles
@@ -283,9 +347,13 @@ let s:impl_select_new = 1
 
 if s:impl_select_new
 
+let s:impl_select_usetagutils = 1
+
 fu! s:source_name_canonicalize(fname)
 	retu simplify(fnamemodify(a:fname, ':p'))
 endf
+
+if !s:impl_select_usetagutils
 
 fu! s:tagfiles_listorstr_to_str(tf_val)
 	let tf_type = type(a:tf_val)
@@ -378,22 +446,35 @@ fu! s:get_taglist_result(tg, ofname, tgaddr, ...)
 	endt
 endf
 
+en " s:impl_select_usetagutils
+
 let s:has_jumplist = has('jumplist')
 let s:has_keeppatterns_cmd = exists(':keeppatterns')
 let s:cmdname_keeppatterns = s:has_keeppatterns_cmd ? 'keeppatterns' : ''
 "? " TODO: TESTING: let s:has_jumplist = 0
 
 " completely new rewrite(s)
-fu! ctrlp#tag#accept(mode, str)
+fu! ctrlp#tag#accept(mode, str) abort
 	" NOTE: as we're not doing ctrlp#exit() anymore at the beginning, we can
 	" assume that the 'CtrlP' window might be current.
 	" prev: cal ctrlp#exit()
 
-	let tgaddr = matchstr(a:str, '^[^\t]\+\t\+[^\t]\+\t\zs[^\t]\{-1,}\ze\%(;"\)\?\t')
+	" FIXME: the format below does not work for the format 1 (see ':h
+	" tags-file-format') supported by vim.
+	" NOTE: the string below did not work for vim's own help files, which do
+	" not have any more fields after the command (and thus never matched the
+	" last tag atom).
+	"+/-: let tgaddr = matchstr(a:str, '^[^\t]\+\t\+[^\t]\+\t\zs[^\t]\{-1,}\ze\%(;"\)\?\t')
+	let tgaddr = matchstr(a:str, '^[^\t]\+\t\+[^\t]\+\t\zs[^\t]\{-1,}\ze\%(;".*\)\?$')
 	" MAYBE: improve the extraction of tg, ofname and tgaddr from a:str
 	let tag_and_name = matchstr(a:str, '^[^\t]\+\t\+[^\t]\+\ze\t')
 	let [tg, ofname] = split(tag_and_name, '\t\+\ze[^\t]\+$')
 	let fname = s:source_name_canonicalize(ofname)
+
+	" FIXME: remove (testing) {{{
+	let tgaddr_hack_suff = get(g:, 'ev_testing_tgaddr_suff', '')
+	let tgaddr .= tgaddr_hack_suff
+	" }}}
 
 	cal ctrlp#ev_log_printf(
 		\	'ctrlp#tag#accept(mode, str): entered. ' .
@@ -421,6 +502,27 @@ fu! ctrlp#tag#accept(mode, str)
 	"  * fallback: 'enter' ext func;
 	let env_dict = copy(ctrlp#get_last_invocation_env())
 
+	if s:impl_select_usetagutils
+
+		let gototag_item_findtagcmd_verb = s:findtagcmd_verb_def
+
+		" TODO: specify other kwargs, too: 'pos_on_notfound', 'action_on_notfound'
+		retu ctrlp#tagutils#accept_tag({
+			\		'mode': a:mode,
+			\		'name': tg,
+			\		'filename': fname,
+			\		'cmd': tgaddr,
+			\		'gototag_data': [
+			\				gototag_item_findtagcmd_verb,
+			\				[ 'set_cmd', 'normal! zvzz' ],
+			\				'post_execmd',
+			\			],
+			\	})
+
+	el " !s:impl_select_usetagutils
+
+	let tagcmd_bufnr = env_dict['crbufnr']
+
 	" . save copy(s:tagfiles) in a local variable;
 	"? let [sav_local_tagfiles, sav_hidden] = [copy(s:tagfiles), &hidden]
 	let sav_local_tagfiles = copy(s:tagfiles)
@@ -444,7 +546,7 @@ fu! ctrlp#tag#accept(mode, str)
 
 	let [sav_bufnr, sav_cpos] = [bufnr('%'), getpos('.')]
 	let cmd_setpos_pref = 'keepalt noautocmd keepjumps hide '
-	let tagcmd_bufnr = env_dict['crbufnr']
+
 	try
 		" . 'set hidden' (so we can switch away from that buffer if necessary);
 		"		(NOTE: we'll use the ':hide' command instead)
@@ -600,6 +702,7 @@ fu! ctrlp#tag#accept(mode, str)
 			exe cmd_setpos_pref . 'cal setpos(''.'', sav_cpos)'
 		en
 	endt
+	en " s:impl_select_usetagutils
 endf
 
 en " s:impl_select_new
@@ -609,7 +712,7 @@ fu! ctrlp#tag#id()
 endf
 
 fu! ctrlp#tag#enter()
-	let s:tagfiles = s:gettagfiles_on_userbuf()
+	let s:tagfiles = s:tagfiles_list_normalise(s:gettagfiles_on_userbuf())
 endf
 "}}}
 

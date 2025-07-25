@@ -264,7 +264,7 @@ fu! s:opts(...)
 	if a:0 && a:1 != {}
 		unl va
 		for [ke, va] in items(a:1)
-			let opke = substitute(ke, '\(\w:\)\?ctrlp_', '', '')
+			let opke = substitute(ke, '\m^\(\w:\)\?ctrlp_', '', '')
 			if has_key(s:lc_opts, opke)
 				let sva = s:lc_opts[opke]
 				unl {sva}
@@ -379,8 +379,24 @@ fu! s:Close()
 	en | endfo
 	if exists('s:glb_acd') | let &acd = s:glb_acd | en
 	let g:ctrlp_lines = []
-	if s:winres[1] >= &lines && s:winres[2] == winnr('$')
-		exe s:winres[0].s:winres[0]
+	" TODO: change s:getenv() to store more information (and also possible move
+	" everything into a dictionary instead of a list) so that we can detect that
+	" we are indeed in the correct tab before attempting to restore the view:
+	"		* check that a (new) tab-variable is present: t:ctrlp_tag --
+	"		  warning: there's no (easy?) way to retrieve a tab-local variable in
+	"		  vim-7.0 (gettabvar() is not available), so this might prove
+	"		  non-trivial to write in vim-7.0-compatible mode.
+	" orig: if s:winres[1] >= &lines && s:winres[2] == winnr('$')
+	let tablytsnap_now = ctrlp#utils#gettablayoutsnapshot()
+	if ctrlp#utils#istablayoutsnapshotsame(
+			\	s:crtablytsnap, {
+			\		'tablayoutsnapshot_new': tablytsnap_now,
+			\		'ignored_fields': 'tablysnapcomp_samewincnt',
+			\	}) &&
+			\	(s:crtablytsnap['lines_term'] >= tablytsnap_now['lines_term'])
+		" prev: " orig: exe s:winres[0].s:winres[0]
+		" prev: exe repeat(s:winres[0], 2)
+		exe repeat(s:crtablytsnap['winrestcmd'], 2)
 	en
 	" NOTE: 's:last_invocation_env_dict' depends on 's:init', so it's safe to
 	" ':unlet' it here.
@@ -887,7 +903,8 @@ fu! s:OnUpdatedState(...)
 			\	string(str), lazy, s:matches,
 			\	get( s:, 'regexp', '<unset>'),
 			\	get( s:, 'did_exp', '<unset>'))
-		sil! cal s:Update(str)
+		" FIXME: put this back: sil! cal s:Update(str)
+		cal s:Update(str)
 	en
 	if upd_gsts
 		cal ctrlp#ev_log_printf(log_pref . 'about to call ctrlp#statusline()')
@@ -1407,6 +1424,7 @@ fu! s:SetWD(args)
 endf
 " * AcceptSelection() {{{1
 fu! ctrlp#acceptfile(...)
+	let log_pref = 'ctrlp#acceptfile():'
 	let useb = 0
 	if a:0 == 1 && type(a:1) == 4
 		let [md, line] = [a:1['action'], a:1['line']]
@@ -1423,6 +1441,20 @@ fu! ctrlp#acceptfile(...)
 			let useb = 1
 		en
 	en
+	" MAYBE: FIXME: re-enable hack: this works for files that have '!&l:buflisted'
+	" NOTE: this might not be ideal for the '[{nn}*No Name]' pseudo-files.
+	"+? if useb && (bufnr == filpath)
+	"+? 	" as we've determined that we'll use a bufnr, we're going to fall back to
+	"+? 	" using 'filpath' if there are issues with switching to that buffer.
+	"+? 	" therefore, we'll make sure that this value is sensible for "edit"
+	"+? 	" commands.
+	"+? 	let filpath = fnamemodify(bufname(bufnr), ':p')
+	"+? en
+	cal ctrlp#ev_log_printf(
+		\	'%s entered. a:000=%s; md=%s; line=%s; bufnr=%d; filpath=%s; useb=%d; ' .
+		\		'atl=%s;',
+		\	log_pref, string(a:000), string(md), string(line),
+		\	bufnr, string(filpath), useb, string(atl))
 	cal s:PrtExit()
 	let tail = s:tail()
 	let j2l = atl != '' ? atl : matchstr(tail, '^ +\zs\d\+$')
@@ -1432,33 +1464,73 @@ fu! ctrlp#acceptfile(...)
 		let buftab = ( s:jmptobuf =~# '[tTVH]' || s:jmptobuf > 1 )
 			\ ? s:buftab(bufnr, md) : [0, 0]
 	en
+	cal ctrlp#ev_log_printf(
+		\	'%s about to jump to buffer/open file. ' .
+		\		'tail=%s; j2l=%d; jmpb=%s; bufwinnr=%s; buftab=%s',
+		\	log_pref, string(tail), j2l,
+		\	string(exists('jmpb') ? jmpb : '<n/a>'),
+		\	string(exists('bufwinnr') ? bufwinnr : '<n/a>'),
+		\	string(exists('buftab') ? buftab : '<n/a>'))
+
 	" Switch to existing buffer or open new one
-	if exists('jmpb') && bufwinnr > 0
-		\ && !( md == 't' && ( s:jmptobuf !~# toupper(md) || buftab[0] ) )
-		exe bufwinnr.'winc w'
-		if j2l | cal ctrlp#j2l(j2l) | en
-	elsei exists('jmpb') && buftab[0]
-		\ && !( md =~ '[evh]' && s:jmptobuf !~# toupper(md) )
-		exe 'tabn' buftab[0]
-		exe buftab[1].'winc w'
-		if j2l | cal ctrlp#j2l(j2l) | en
-	el
-		" Determine the command to use
-		let useb = bufnr > 0 && buflisted(bufnr) && ( empty(tail) || useb )
-		let cmd =
-			\ md == 't' || s:splitwin == 1 ? ( useb ? 'tab sb' : 'tabe' ) :
-			\ md == 'h' || s:splitwin == 2 ? ( useb ? 'sb' : 'new' ) :
-			\ md == 'v' || s:splitwin == 3 ? ( useb ? 'vert sb' : 'vne' ) :
-			\ &bt == 'help' && useb ? call('ctrlp#normcmd', ['b', 'bo vert sb']) :
-			\ call('ctrlp#normcmd', useb ? ['b', 'bo vert sb'] : ['e'])
-		" Reset &switchbuf option
-		let [swb, &swb] = [&swb, '']
-		" Open new window/buffer
-		let [fid, tail] = [( useb ? bufnr : filpath ), ( atl != '' ? ' +'.atl : tail )]
-		let args = [cmd, fid, tail, 1, [useb, j2l]]
-		cal call('s:openfile', args)
-		let &swb = swb
-	en
+	try
+		if exists('jmpb') && bufwinnr > 0
+			\ && !( md == 't' && ( s:jmptobuf !~# toupper(md) || buftab[0] ) )
+			exe bufwinnr.'winc w'
+			if j2l | cal ctrlp#j2l(j2l) | en
+		elsei exists('jmpb') && buftab[0]
+			\ && !( md =~ '[evh]' && s:jmptobuf !~# toupper(md) )
+			exe 'tabn' buftab[0]
+			exe buftab[1].'winc w'
+			if j2l | cal ctrlp#j2l(j2l) | en
+		el
+			" Determine the command to use
+			let useb = bufnr > 0 && buflisted(bufnr) && ( empty(tail) || useb )
+			" NOTE: sometimes vim will load certain files itself (possibly without
+			" running autocmds, for example), and leave them in the buffer list, but
+			" with '!&l:buflisted'.
+			if (!useb) && (bufnr > 0)
+				\	&& ( (type(filpath) != 1) || empty(filpath) )
+				unl! filpath
+				let filpath = fnamemodify(bufname(bufnr), ':p')
+			en
+			let cmd =
+				\ md == 't' || s:splitwin == 1 ? ( useb ? 'tab sb' : 'tabe' ) :
+				\ md == 'h' || s:splitwin == 2 ? ( useb ? 'sb' : 'new' ) :
+				\ md == 'v' || s:splitwin == 3 ? ( useb ? 'vert sb' : 'vne' ) :
+				\ &bt == 'help' && useb ? call('ctrlp#normcmd', ['b', 'bo vert sb']) :
+				\ call('ctrlp#normcmd', useb ? ['b', 'bo vert sb'] : ['e'])
+			" Reset &switchbuf option
+			let [swb, &swb] = [&swb, '']
+			try
+				" Open new window/buffer
+				let [fid, tail] = [( useb ? bufnr : filpath ), ( atl != '' ? ' +'.atl : tail )]
+				let args = [cmd, fid, tail, 1, [useb, j2l]]
+				cal call('s:openfile', args)
+			fina
+				let &swb = swb
+			endt
+		en
+
+	fina
+		let msg_retu_type = empty(v:exception)
+			\	?	'switched to buffer/file. '
+			\	:	printf(
+			\			'exception caught trying to switch to buffer/file. ' .
+			\				'v:exception=%s; v:throwpoint=%s; ',
+			\			string(v:exception), string(v:throwpoint))
+		cal ctrlp#ev_log_printf(
+			\	'%s about to return. %s' .
+			\		'useb=%d; ' .
+			\		'bufnr_now=%d; bufname_now=%s; ' .
+			\		'&hidden=%d; ' .
+			\		'&l:bufhidden=%s; &l:buflisted=%d; &l:buftype=%s; &l:swapfile=%d;',
+			\	log_pref, msg_retu_type,
+			\	useb,
+			\	bufnr('%'), string(bufname('%')),
+			\	&hidden,
+			\	string(&l:bufhidden), &l:buflisted, string(&l:buftype), &l:swapfile)
+	endt
 endf
 
 fu! s:SpecInputs(str)
@@ -2349,6 +2421,12 @@ fu! s:bufwins(bufnr)
 	retu winns
 endf
 
+" TODO: remove this function and use ctrlp#utils#pathname_is_abs() in this file
+if 1
+fu! s:isabs(path)
+	retu ctrlp#utils#pathname_is_abs(a:path)
+endf
+el
 fu! s:isabs(path)
 	if (has('win32') || has('win64'))
 		return a:path =~ '^\([a-zA-Z]:\)\{-}[/\\]'
@@ -2356,6 +2434,7 @@ fu! s:isabs(path)
 		return a:path =~ '^[/\\]'
 	en
 endf
+en
 
 fu! s:bufnrfilpath(line)
   if s:isabs(a:line) || a:line =~ '^\~[/\\]' || a:line =~ '^\w\+:\/\/'
@@ -2664,7 +2743,8 @@ fu! s:isterminal(buf)
 endf
 " Entering & Exiting {{{2
 fu! s:getenv()
-	let [s:cwd, s:winres] = [getcwd(), [winrestcmd(), &lines, winnr('$')]]
+	" orig: let [s:cwd, s:winres] = [getcwd(), [winrestcmd(), &lines, winnr('$')]]
+	let [s:cwd, s:crtablytsnap] = [getcwd(), ctrlp#utils#gettablayoutsnapshot()]
 	let [s:crword, s:crnbword] = [expand('<cword>', 1), expand('<cWORD>', 1)]
 	let [s:crgfile, s:crline] = [expand('<cfile>', 1), getline('.')]
 	let [s:winmaxh, s:crcursor] = [min([s:mw_max, &lines]), getpos('.')]
@@ -2702,10 +2782,24 @@ fu! ctrlp#get_last_invocation_env()
 			\		'cwd': s:cwd,
 			\		'crfile': s:crfile,
 			\		'crfpath': s:crfpath,
+			\		'crtablytsnap': s:crtablytsnap,
 			\ }
 	en
 	retu s:last_invocation_env_dict
 endf
+
+fu! ctrlp#istablayoutsnapshotsameasonentry(...)
+	"-? let except_pref = 'ctrlp#istablayoutsnapshotsameasonentry():'
+	retu call(
+		\	'ctrlp#utils#istablayoutsnapshotsame',
+		\	[s:crtablytsnap] + a:000)
+endf
+
+"? fu! ctrlp#istablayoutsnapshotsameasonentry_samewinfocused(...)
+"? 	let except_pref = 'ctr'
+"? 	" ref: \		'tablysnapcomp_samewinfocused': [
+"? 	"? let kwargs = a:0 ? a:1 : {}
+"? endf
 
 fu! s:lastvisual()
 	let cview = winsaveview()
@@ -2738,12 +2832,19 @@ fu! s:buffunc(e)
 endf
 
 fu! s:openfile(cmd, fid, tail, chkmod, ...)
+	let log_pref = 's:openfile():'
 	let cmd = a:cmd
 	if a:chkmod && cmd =~ '^[eb]$' && ctrlp#modfilecond(!( cmd == 'b' && &aw ))
 		let cmd = cmd == 'b' ? 'sb' : 'sp'
 	en
 	let cmd = cmd =~ '^tab' ? ctrlp#tabcount().cmd : cmd
 	let j2l = a:0 && a:1[0] ? a:1[1] : 0
+	cal ctrlp#ev_log_printf(
+		\	'%s entered. a:cmd=%s; a:fid=%s; a:tail=%s; a:chkmod=%s; a:000=%s; ' .
+		\		'cmd=%s; j2l=%d;',
+		\	log_pref, string(a:cmd), string(a:fid), string(a:tail),
+		\	string(a:chkmod), string(a:000),
+		\	string(cmd), string(j2l))
 	exe cmd.( a:0 && a:1[0] ? '' : a:tail ) s:fnesc(a:fid, 'f')
 	if j2l
 		cal ctrlp#j2l(j2l)

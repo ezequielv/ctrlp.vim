@@ -35,6 +35,7 @@ let [s:pref, s:opts] = ['g:ctrlp_buftag_', {
 	\ 'linesfrombuffer': ['s:linesfrombuffer_flag', 1],
 	\ 'cache_mru_maxage': ['s:cache_mru_maxage', 10],
 	\ 'cache_mru_dupcounts': ['s:cache_mru_dupcounts', 0],
+	\	'findtagcmd_verb': ['s:findtagcmd_verb_def', 'findtag_searchnearby'],
 	\ }]
 
 let s:bins = [
@@ -312,19 +313,84 @@ fu! s:rmtempfiles()
 endf
 
 " optional args:
-"  fname: usually a value retrieved through 'bufname()'.
-"   default: bufname('%')
+"		* bufexpr | pathname:
+"			* bufexpr: same as the arg bufname() and bufnr()
+"			* pathname: any pathname that exists in the filesystem.
+" prev: "  fname: usually a value retrieved through 'bufname()'.
+" prev: "   default: bufname('%')
 fu! s:get_lines_cache_key(...) abort
 	" NOTE: we're using 'bufnr()' now, as those can change for files that have
 	" been ':bwipe'd, for example, and we don't want to be too clever about
 	" caching previous file contents when we're really keeping buffer-related
 	" lines here.
-	" NOTE: it's possible that this is a pre-existing bug, so this might go in a
-	" different branch (the code using this function should be taken as well, at
-	" least minimally, to avoid propagating the decision as to what is the
-	" actual key calculation, and keep it in a single place).
-	let bname = fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
-	let bufnr = bufnr(bname)
+	" prev: " NOTE: it's possible that this is a pre-existing bug, so this might go in a
+	" prev: " different branch (the code using this function should be taken as well, at
+	" prev: " least minimally, to avoid propagating the decision as to what is the
+	" prev: " actual key calculation, and keep it in a single place).
+	" prev: " prev: let bname = fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+	" prev: "? let bname = a:0 ? ( (type(a:1) == 0) ? bufname(a:1) : a:1 ) : bufname('%')
+	" prev: "? let bname = fnamemodify(a:0 ? ( (type(a:1) == 0) ? bufname(a:1) : a:1 ) : bufname('%'), ':p')
+	" prev: let bname = fnamemodify(a:0 ? a:1 : bufname('%'), ':p')
+	" prev: let bufnr = bufnr(bname)
+
+	" MAYBE: refactor the function (I think it's 's:...') in ctrlp.vim to
+	" retrieve bufnr and bufname, or make a new one in ctrlp/utils.vim to do
+	" that: ctrlp#utils#get_bufnr_and_bufname_for(bufexpr)
+	" prev: if a:0 && (type(a:1) == 0)
+	" prev: 	" NOTE: this could be "invalid" (-1) or a "magic" value (0).
+	" prev: 	" prev: " prev: let bufnr = a:1
+	" prev: 	" prev: " prev: let bname = bufname(bufnr)
+	" prev: 	" prev: let [bufnr, bname] = [a:1, '']
+	" prev: 	let [bufnr, bname] = [bufnr(a:1), '']
+	" prev: elsei a:0
+	" prev: 	" prev: let [bufnr, bname] = [-1, a:1]
+	" prev: 	let bname = a:1
+	" prev: 	" prev: " if there is a buffer that can use 'bname' as a valid '{expr}'
+	" prev: 	" prev: " (see ':h bufname()')...
+	" prev: 	let bufnr = bufnr(bname)
+	" prev: 	" prev: " prev: if bufnr > 0
+	" prev: 	" prev: " prev: 	" then the buffer name should be retrieved from vim itself.
+	" prev: 	" prev: " prev: 	let bname = bufname(bufnr)
+	" prev: 	" prev: " prev: " note: otherwise, leave bufnr as "invalid" and bname as it was.
+	" prev: 	" prev: " prev: en
+	" prev: 	" prev: " if we have found a bufnr, then retrieve the bufname later.
+	" prev: 	" prev: if bufnr > 0 | let bname = '' | en
+	" prev: else
+	" prev: 	let [bufnr, bname] = [bufnr('%'), '']
+	" prev: en
+	" prev: if !( (bufnr > 0) || (!empty(bname)) )
+	" prev: 	throw printf(
+	" prev: 		\	'%s could not work out bufnr and bufname from args. a:000=%s;',
+	" prev: 		\	except_pref, string(a:000))
+	" prev: en
+	" prev: " prev: if (bufnr > 0) && empty(bname)
+	" prev: " prev: 	let bname = bufname(bufnr)
+	" prev: " prev: elsei (!empty(bname)) && (!(bufnr > 0))
+	" prev: " prev: 	let bufnr = bufnr(bname)
+	" prev: " prev: en
+	" prev: if (!empty(bname)) && (!(bufnr > 0))
+	" prev: 	let bufnr = bufnr(bname)
+	" prev: en
+	" prev: if (bufnr > 0)
+	" prev: 	let bname = bufname(bufnr)
+	" prev: en
+	" prev: "- we_can_use_either: if !((bufnr > 0) && (!empty(bname)))
+	" prev: "- we_can_use_either: 	throw printf(
+	" prev: "- we_can_use_either: 		\	'%s could not work out bufnr and bufname from args. ' .
+	" prev: "- we_can_use_either: 		\		'a:000=%s; bufnr=%d; bname=%s;',
+	" prev: "- we_can_use_either: 		\	except_pref, string(a:000), bufnr, string(bufname))
+	" prev: "- we_can_use_either: en
+
+	let bufexpr = a:0 ? a:1 : ''
+	let [bufnr, bname] = [bufnr(bufexpr), ( (type(bufexpr) == 0) ? '' : bufexpr )]
+	if bufnr > 0
+		let bname = bufname(bufnr)
+	en
+
+	if ctrlp#utils#bufname_is_pathname(bname)
+		let bname = fnamemodify(bname, ':p')
+	en
+
 	" guard against files that (somehow) do not have a buffer associated to
 	" them.  For now, we still track them, but we'll keep them separate from the
 	" ones that do have an associated buffer.
@@ -524,8 +590,10 @@ fu! s:parseline(line, match_use_bufcontents)
 	let [bufnr, bufname] = [bufnr('^'.fname.'$'), fnamemodify(fname, ':p:t')]
 
 	let lineno = vals[6]
+	" ref: fu! ctrlp#utils#regex_literal2regex_nomagic(str)
 	let pattern = a:match_use_bufcontents
-		\ ? get(getbufline(bufnr, lineno), 0, '')
+		\ ? ctrlp#utils#regex_literal2regex_nomagic(
+		\			get(getbufline(bufnr, lineno), 0, ''))
 		\ : vals[3]
 	" MAYBE: make the "remove leading and trailing spaces" unconditional, so
 	" patterns will match more easily (they'll deal with de-indenting better
@@ -653,6 +721,481 @@ fu! ctrlp#buffertag#init(fname)
 	retu lines
 endf
 
+let s:impl_select_usetagutils = 1
+
+if get(s:, 'impl_select_usetagutils')
+
+let s:impl_select_usetagutils_2 = 1
+
+if get(s:, 'impl_select_usetagutils_2')
+
+fu! ctrlp#buffertag#accept(mode, str)
+	let log_pref = 'ctrlp#buffertag#accept():'
+	"? let except_pref = log_pref
+
+	let vals = matchlist(a:str,
+		\ '\v^([^\t]+)\t+[^\t|]+\|(\d+)\:[^\t|]+\|(\d+)\|\s(.+)$')
+	let bufnr = str2nr(get(vals, 2))
+	if !(bufnr > 0) | retu | en
+
+	let tg = get(vals, 1, '')
+	let lineno = str2nr(get(vals, 3, 0))
+	let tgline = get(vals, 4, '')
+
+	" prev: " as we know that we've shown the original line *if* the ctags program was
+	" prev: " happy to generate a line number as the 'ex' command to find the tag, we
+	" prev: " need to make the original buffer line string into a 'nomagic'-compatible
+	" prev: " pattern.
+	" prev: if lineno > 0
+	" prev: 	" prev: let tgline = escape(tgline, '\')
+	" prev: 	let tgline = ctrlp#utils#regex_literal2regex_nomagic(tgline)
+	" prev: en
+
+	let match_use_bufcontents = 0
+
+	" optionally leave the cursor in the current line: when we know that the
+	" tags correspond to the buffer contents
+	" (cache_entry['match_use_bufcontents'] is set), there is no point in
+	" trying to run the 'ex' command in the 'ctags(5)' file to position the
+	" cursor in the line for the selected identifier.
+	let lines_cache_key = s:get_lines_cache_key(bufnr)
+	if has_key(g:ctrlp_buftags, lines_cache_key)
+		let cache_entry = g:ctrlp_buftags[lines_cache_key]
+		if get(cache_entry, 'match_use_bufcontents')
+					\ && (get(cache_entry, 'changedtick') ==#
+					\		ctrlp#utils#getbufvar(bufnr, 'changedtick'))
+			let match_use_bufcontents = 1
+		en
+	en
+
+	" FIXME: remove (testing) {{{
+	let tgline_hack_suff = get(g:, 'ev_testing_tgline_suff', '')
+	let tgline .= tgline_hack_suff
+	" }}}
+
+	let expr_dict = ctrlp#tagutils#tgcmd_searchexprdict_createstd(tgline)
+
+	" TODO: implement a new variable to allow for this sequence of commands:
+	"		* if match_use_bufcontents?:
+	"			+ start search at the specified 'lineno' (if one exists): this is
+	"				going to be a new "set variable" command:
+	"				+	'set_search_startpos': (will be ignored in 'post_search_nearby',
+	"					as the starting position for that is whichever is the ending
+	"					position for the preceding successful command(s));
+	"					+ <=0: disable this (this will 'unlet!' the variable inside the
+	"						function, so the starting position will be the current position
+	"						in that buffer (or something else?));
+	"					+ >0: use this line number;
+	"					+ list: use (certain elements of?) as a parameter to setpos('.', ...)
+	"						+ maybe: ignore the bufnr and possibly others
+	"			+ use a new command: 'findtag_searchnearby', so the same internal
+	"				function can be used (s:search_nearby_move());
+	" prev: let gototag_item_findtagcmd_verb = 'findtag_tagcmd'
+	let gototag_item_findtagcmd_verb = s:findtagcmd_verb_def
+
+	" TODO: specify other kwargs, too: 'pos_on_notfound', 'action_on_notfound'
+	if 1
+
+	let gototag_item_findtagcmd_issearch = 
+		\	ctrlp#tagutils#accept_tag_gototagdata_verbusesdataid(
+		\		gototag_item_findtagcmd_verb,
+		\		'gtd_dataid_pattern')
+
+	let gototag_item_searchpattern_verb =
+		\	( gototag_item_findtagcmd_issearch || (!(lineno > 0)) )
+		\	?	gototag_item_findtagcmd_verb
+		\	:	'post_search_nearby'
+
+	cal ctrlp#ev_log_printf(
+		\	'%s about to call ctrlp#tagutils#accept_tag(). ' .
+		\		'mode=%s; name=%s; bufnr=%d; ' .
+		\		'tgline=%s; lineno=%d; ' .
+		\		'match_use_bufcontents=%d; ' .
+		\		'gototag_item_findtagcmd_issearch=%d; ' .
+		\		'gototag_item_searchpattern_verb=%s;',
+		\	log_pref, string(a:mode), string(tg), bufnr,
+		\	string(tgline), lineno,
+		\	match_use_bufcontents,
+		\	gototag_item_findtagcmd_issearch,
+		\	string(gototag_item_searchpattern_verb)
+		\	)
+	retu ctrlp#tagutils#accept_tag({
+		\		'mode': a:mode,
+		\		'name': tg,
+		\		'bufnr': bufnr,
+		\		'gototag_data':
+		\			(	match_use_bufcontents
+		\				?	[
+		\						[ 'set_search_nearby_maxdistance', 0 ],
+		\					]
+		\				:	[]
+		\			)
+		\			+
+		\			(	(lineno > 0)
+		\				?	(	gototag_item_findtagcmd_issearch
+		\						?	[
+		\								[ 'set_search_startpos', lineno ],
+		\							]
+		\						:	[
+		\								[ 'set_cmd', '' . lineno ],
+		\								gototag_item_findtagcmd_verb,
+		\								[ 'post_execmd', 'normal! ^' ],
+		\							]
+		\					)
+		\				:	[]
+		\			)
+		\			+
+		\			ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\				expr_dict,
+		\				gototag_item_searchpattern_verb,
+		\				'tgcmd_exprid_tgpattern_orig')
+		\			+
+		\			(	match_use_bufcontents
+		\				?	[]
+		\				:
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_ignws_lead')
+		\					+
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_ignws_trail')
+		\					+
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_ignws_all')
+		\					+
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_substr_anyaround')
+		\			)
+		\			+
+		\			[
+		\				[ 'set_cmd', 'normal! zvzz' ],
+		\				'post_execmd',
+		\			],
+		\	})
+
+	elsei 1
+
+	let gototag_item_searchpattern_verb =
+		\	( match_use_bufcontents || ( lineno > 0 ) )
+		\	?	'post_search_nearby'
+		\	:	gototag_item_findtagcmd_verb
+
+	retu ctrlp#tagutils#accept_tag({
+		\		'mode': a:mode,
+		\		'name': tg,
+		\		'bufnr': bufnr,
+		\		'gototag_data':
+		\			(	(lineno > 0)
+		\				?	[
+		\						[ 'set_cmd', '' . lineno ],
+		\						gototag_item_findtagcmd_verb,
+		\						[ 'post_execmd', 'normal! ^' ],
+		\					] +
+		\					(	match_use_bufcontents
+		\						?	[
+		\								[ 'set_search_nearby_maxdistance', 0 ],
+		\							]
+		\						:	[]
+		\					)
+		\				:	(	match_use_bufcontents
+		\						?	ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\								expr_dict,
+		\								gototag_item_findtagcmd_verb,
+		\								'tgcmd_exprid_tgpattern_orig')
+		\						:	[]
+		\					)
+		\			)
+		\			+
+		\			(	(!( (lineno > 0) && match_use_bufcontents ))
+		\				?
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_orig')
+		\					+
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_ignws_lead')
+		\					+
+		\					ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\						expr_dict,
+		\						gototag_item_searchpattern_verb,
+		\						'tgcmd_exprid_tgpattern_ignws_trail')
+		\				:	[]
+		\			)
+		\			+
+		\			ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\				expr_dict,
+		\				gototag_item_searchpattern_verb,
+		\				'tgcmd_exprid_tgpattern_ignws_all')
+		\			+
+		\			ctrlp#tagutils#accept_tag_gototagdata_getelemsfromsrchexprdict(
+		\				expr_dict,
+		\				gototag_item_searchpattern_verb,
+		\				'tgcmd_exprid_tgpattern_substr_anyaround')
+		\			+
+		\			[
+		\				[ 'set_cmd', 'normal! zvzz' ],
+		\				'post_execmd',
+		\			],
+		\	})
+	en
+endf
+
+el " s:impl_select_usetagutils_2
+
+	" FIXME: continue...
+	"  TODO: in ctrlp#tagutils#accept_tag():
+	"   TODO: the 'post_search_nearby' should flag whether it has found
+	"   something or not, and just execute it once (like the 'findtag_tagcmd'
+	"   does)
+	"   TODO: when executing 'post_search_nearby', make sure that we save the
+	"   position at which the tag has been "found", so we can revert to that
+	"   position if the search hasn't worked.
+	"   TODO: when executing 'post_search_nearby', try not to have a loop, but
+	"   instead be clever about lines that match, so we can work out which one
+	"   is the closest one from where the cursor is (/supposed to be).
+	"    NOTE: see ':h search()', and think of "distances" to use on each
+	"    iteration: maybe something like: 50 lines, 300 lines, 25%, 60%, 100%?
+	"    (obviously trimming the ranges that don't make sense/that have been
+	"    already searched)
+	"   TODO: when processing commands (of what type?), make sure that
+	"   'keepjumps' (and whichever other) are all automatically added.
+	"   TODO: make sure we save, force setting, and restore: hlsearch, @/, etc.
+	"   TODO: support a list of commands to execute ('findtag_execmd', etc.), in
+	"   such a way that command prefixes can be added to every list item, if
+	"   needed.
+	"    TODO: or just save, force set, and restore certain settings.
+	"     TODO: make sure that things like 'sandbox' can be done in that way,
+	"     too, or just fallback to running every command with a prefix for those
+	"     settings that can't be set (and restored) using options (say, for
+	"     'sandbox'), and still save-set-restore values for the others (like
+	"     'noautocmd', which can be emulated by setting a global option, for
+	"     example).
+fu! ctrlp#buffertag#accept(mode, str)
+	" prev: \ '\v^[^\t]+\t+[^\t|]+\|(\d+)\:[^\t|]+\|(\d+)\|\s(.+)$')
+	let vals = matchlist(a:str,
+		\ '\v^([^\t]+)\t+[^\t|]+\|(\d+)\:[^\t|]+\|(\d+)\|\s(.+)$')
+	" prev: let bufnr = str2nr(get(vals, 1))
+	let bufnr = str2nr(get(vals, 2))
+	if !(bufnr > 0) | retu | en
+
+	let tg = get(vals, 1, '')
+	" prev: let lineno = str2nr(get(vals, 2, 0))
+	let lineno = str2nr(get(vals, 3, 0))
+	" prev: let tgline = get(vals, 3, '')
+	let tgline = get(vals, 4, '')
+
+	let match_use_bufcontents = 0
+
+	" optionally leave the cursor in the current line: when we know that the
+	" tags correspond to the buffer contents
+	" (cache_entry['match_use_bufcontents'] is set), there is no point in
+	" trying to run the 'ex' command in the 'ctags(5)' file to position the
+	" cursor in the line for the selected identifier.
+	let lines_cache_key = s:get_lines_cache_key(bufnr)
+	if has_key(g:ctrlp_buftags, lines_cache_key)
+		let cache_entry = g:ctrlp_buftags[lines_cache_key]
+		if get(cache_entry, 'match_use_bufcontents')
+					\ && (get(cache_entry, 'changedtick') ==#
+					\		ctrlp#utils#getbufvar(bufnr, 'changedtick'))
+			let match_use_bufcontents = 1
+		en
+	en
+
+	" If we use 'tgsearchstr' when 'match_use_bufcontents' is true, then we
+	" need to be a bit more relaxed with regards to spaces before and after
+	" the non-whitespace "middle bit", as that could have been removed in
+	" 's:parseline()'.
+	let tgsearchstr_pref = '\V\C'
+
+	" TODO: idea: tgsearchstr_meat_orig, tgsearchstr_meat_nows
+	"  IDEA: map([['tgsearchstr_meat_orig', []], ['tgsearchstr_meat_nows',
+	"  [/*args to substitute to replace leading and trailing whitespaces for the
+	"  empty string*/]]]) // include the 'escape()' in the result
+	" prev: let tgsearchstr_meat = escape(tgline, '\')
+	"? [unfinished] let tgsearch_items_list = map(
+	"? [unfinished] 	\		[
+	"? [unfinished] 	\			['tgsearchstr_meat_orig', []],
+	"? [unfinished] 	\			['tgsearchstr_meat_nows', ['\v^\s*(.{-})\s*$', '\1', '']],
+	"? [unfinished] 	\		],
+	"? [unfinished] 	\		'empty(v:val[1]) ? [v:val[0], tgline] : ' .
+	"? [unfinished] 	\			'[v:val[0], call("substitute", [tgline] + v:val[1])]'
+	"? [unfinished] 	\		// ... 'escape((empty(v:val[1]) ? v:val....))'
+	"? [unfinished] 	\	)
+	"- let tgsearch_flavours_dict = map(
+	"- 	\	map(
+	"- 	\		{
+	"- 	\			'tgsearchstr_meat_orig': [],
+	"- 	\			'tgsearchstr_meat_nows': ['\v^\s*(.{-})\s*$', '\1', ''],
+	"- 	\		},
+	"- 	\		'empty(v:val) ? tgline : ' .
+	"- 	\			'call("substitute", [tgline] + v:val)'),
+	"- 	\	'escape(v:val, ''\'')'
+	"- 	\	)
+	" TODO: add other "flavours": .._nows_lead, ..._nows_trail
+	" TODO: add new "regex" variables and add them when !match_use_bufcontents
+	"  (see below), so we try:
+	"  * exact (exact match on the leading and trailing spaces);
+	"  * ignore leading spaces (but trailing spaces are the same);
+	"  * ignore trailing spaces (but leading are the same);
+	"  * ignore all whitespaces (but the only thing around it should be
+	"			whitespaces);
+	"	 * ignore anything around the nows string (this is the "relaxed");
+	"	IDEA: create a dictionary based on the "tagcmd" ('tgline' here) with every
+	"	one of the alternatives above, allowing for:
+	"		* use of 'nomagic', as per the 'vi(1)' ':h tags-file-format';
+	"			MAYBE: always generate these 'nomagic' strings everywhere in that
+	"			function;
+	"		* create elements that are either the patterns, or the commands (for
+	"			now, only the '/' is added at the beginning of each of the generated
+	"			patterns);
+	"		* use these entries from both 'ctrlp/tag.vim' and 'ctrlp/buffertag.vim'
+	"			to specify the values for each of the search patterns.
+	"			NOTE: the 'post_search_nearby' now allows for an optional search
+	"			string, so that we could 'map()' every entry returned in the
+	"			dictionary generated by that function into values to be passed to
+	"			ctrlp#tagutils#accept_tag().
+	"			IDEA: so we can transform the dictionary values using 'map()':
+	"				map(['tgsearchstr_orig', 'tgsearchstr_ignore_leading_spaces', ...],
+	"					'[ ''post_search_nearby'', generated_dict[v:val] ]')
+	let tgsearch_flavours_dict = map(
+		\	{
+		\		'tgsearchstr_meat_orig': 0,
+		\		'tgsearchstr_meat_nows': ['\v^\s*(.{-})\s*$', '\1', ''],
+		\	},
+		\	'empty(v:val) ? tgline : ' .
+		\		'call("substitute", [tgline] + v:val)')
+
+	" prev: let tgsearchstr_skipws = match_use_bufcontents ? '\s\*' : ''
+	let tgsearchstr_skipws = '\s\*'
+
+	" prev: " prev: let tgsearchstr =
+	" prev: " prev: 	\	tgsearchstr_pref .
+	" prev: " prev: 	\	'\^' .
+	" prev: " prev: 	\	tgsearchstr_skipws .
+	" prev: " prev: 	\	tgsearchstr_meat .
+	" prev: " prev: 	\	tgsearchstr_skipws .
+	" prev: " prev: 	\	'\$'
+	" prev: let tgsearchstr_final_ignorewhitespace =
+	" prev: 	\	tgsearchstr_pref .
+	" prev: 	\	'\^' .
+	" prev: 	\	tgsearchstr_skipws .
+	" prev: 	\	tgsearchstr_meat .
+	" prev: 	\	tgsearchstr_skipws .
+	" prev: 	\	'\$'
+	" prev: let tgsearchstr_final_exact =
+	" prev: 	\	tgsearchstr_pref .
+	" prev: 	\	'\^' .
+	" prev: 	\	tgsearchstr_meat .
+	" prev: 	\	'\$'
+	" prev: let tgsearchstr_final_relaxed =
+	" prev: 	\	tgsearchstr_pref .
+	" prev: 	\	tgsearchstr_meat
+	let tgsearchstr_final_ignorewhitespace =
+		\	tgsearchstr_pref .
+		\	'\^' .
+		\	tgsearchstr_skipws .
+		\	tgsearch_flavours_dict['tgsearchstr_meat_nows'] .
+		\	tgsearchstr_skipws .
+		\	'\$'
+	let tgsearchstr_final_exact =
+		\	tgsearchstr_pref .
+		\	'\^' .
+		\	tgsearch_flavours_dict['tgsearchstr_meat_orig'] .
+		\	'\$'
+	let tgsearchstr_final_relaxed =
+		\	tgsearchstr_pref .
+		\	tgsearch_flavours_dict['tgsearchstr_meat_nows'] .
+		\	''
+
+	let tgsearch_cmd_pref = '/'
+
+	" prev: let tgsearch_cmd = tgsearch_cmd_pref . tgsearchstr
+
+	" prev: \			(	( (lineno > 0) && match_use_bufcontents )
+	" prev: \				?  [
+	" prev: \						[ 'set_cmd', lineno ],
+	" prev: \						'findtag_tagcmd',
+	" prev: \					] +
+	" prev: \				:	[]
+	" prev: \			) +
+	"
+	" prev: \			[
+	" prev: \				[ 'set_cmd',
+	" prev: \					(	( lineno > 0 )
+	" prev: \						?	lineno
+	" prev: \						:	tgsearch_cmd_pref .
+	" prev: \							(	match_use_bufcontents
+	" prev: \								?	tgsearchstr_final_ignorewhitespace
+	" prev: \								:	tgsearchstr_final_exact
+	" prev: \							)
+	" prev: \					)
+	" prev: \				],
+	" prev: \				'findtag_tagcmd',
+	" prev: \			] +
+	" TODO: specify other kwargs, too: 'pos_on_notfound', 'action_on_notfound'
+	retu ctrlp#tagutils#accept_tag({
+		\		'mode': a:mode,
+		\		'name': tg,
+		\		'bufnr': bufnr,
+		\		'gototag_data':
+		\			(	(lineno > 0)
+		\				?	[
+		\						[ 'set_cmd', '' . lineno ],
+		\						'findtag_tagcmd',
+		\					]
+		\				:	[]
+		\			) +
+		\			(	(!match_use_bufcontents)
+		\				?	[
+		\						[ 'set_cmd',
+		\							tgsearch_cmd_pref .
+		\								tgsearchstr_final_exact ],
+		\						'findtag_tagcmd',
+		\					]
+		\				:	[]
+		\			) +
+		\			[
+		\				[ 'set_cmd',
+		\					tgsearch_cmd_pref .
+		\						tgsearchstr_final_ignorewhitespace ],
+		\				'findtag_tagcmd',
+		\			] +
+		\			(	(!match_use_bufcontents)
+		\				?	[
+		\						[ 'set_searchstring',
+		\							tgsearchstr_final_exact ],
+		\						'post_search_nearby',
+		\						[ 'set_searchstring',
+		\							tgsearchstr_final_ignorewhitespace ],
+		\						'post_search_nearby',
+		\						[ 'set_searchstring',
+		\							tgsearchstr_final_relaxed ],
+		\						'post_search_nearby',
+		\					]
+		\				:	[]
+		\			) +
+		\			[
+		\				[ 'set_cmd', 'normal! zvzz' ],
+		\				'post_execmd',
+		\			],
+		\	})
+
+endf
+
+en " s:impl_select_usetagutils_2
+
+el " s:impl_select_usetagutils
+
 fu! ctrlp#buffertag#accept(mode, str)
 	let vals = matchlist(a:str,
 		\ '\v^[^\t]+\t+[^\t|]+\|(\d+)\:[^\t|]+\|(\d+)\|\s(.+)$')
@@ -695,6 +1238,8 @@ fu! ctrlp#buffertag#accept(mode, str)
 		sil! norm! zvzz
 	en
 endf
+
+en " s:impl_select_usetagutils
 
 fu! ctrlp#buffertag#cmd(mode, ...)
 	let s:btmode = a:mode
